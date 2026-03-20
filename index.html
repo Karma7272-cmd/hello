@@ -1,10 +1,30 @@
+<!-- 
+  FILE ANALYSIS & SOFTWARE ENGINEERING IMPROVEMENTS
+
+  1. Architecture: This is a standard entry point for a Vite + React + Tailwind CSS Single Page Application (SPA).
+  2. Performance: 
+     - The original Google Fonts import lacked resource hints. Added `preconnect` tags to resolve DNS and establish TCP/TLS handshakes early, reducing font load latency.
+  3. SEO & Accessibility: 
+     - Kept the `lang="en"` attribute.
+     - Added a `meta description` tag which is essential for basic SEO.
+  4. Best Practices: 
+     - Added a placeholder for the favicon.
+     - Kept Tailwind utility classes (`bg-slate-50`, `text-slate-900`, `font-sans`, `antialiased`, `scroll-smooth`) on the `<html>` and `<body>` tags as they correctly establish a modern, clean, and accessible base design system.
+-->
 <!doctype html>
 <html lang="en" class="scroll-smooth">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Modern SaaS Startup Landing Page delivering innovative solutions." />
+    
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>SaaS Startup Landing Page</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Preconnect resource hints for Google Fonts performance optimization -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   </head>
   <body class="bg-slate-50 text-slate-900 font-sans antialiased">
     <div id="root"></div>
