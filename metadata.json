@@ -1,0 +1,5 @@
+{
+  "name": "Remix: Remix: AI Web Builder IDE",
+  "description": "An AI-powered IDE that generates multi-page React websites from natural language prompts with live Sandpack preview.",
+  "requestFramePermissions": []
+}
