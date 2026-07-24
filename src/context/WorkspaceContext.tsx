@@ -1,6 +1,17 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import * as Babel from "@babel/standalone";
 import { generateWebsite, editElementWithAI, autoFixErrorWithAI, editWebsiteWithAI, FileStructure } from "../lib/gemini";
+import { 
+  auth, 
+  signInWithGoogle, 
+  logoutUser, 
+  saveProjectToFirestore, 
+  loadProjectsFromFirestore, 
+  deleteProjectFromFirestore, 
+  saveConnectorsToFirestore, 
+  loadConnectorsFromFirestore 
+} from "../lib/firebase";
+import { onAuthStateChanged, User } from "firebase/auth";
 
 // Helper to resolve relative paths
 export const resolveRelativePath = (fromPath: string, relativePath: string, files: Record<string, any>): string => {
@@ -87,13 +98,20 @@ interface WorkspaceContextType {
   autoFixEnabled: boolean;
   setAutoFixEnabled: (enabled: boolean) => void;
   triggerAutoFix: (errorMessage: string, errorContext?: string) => Promise<void>;
-  latestPreviewError: { message: string; context?: string } | null;
-  setLatestPreviewError: (error: { message: string; context?: string } | null) => void;
+  latestPreviewError: { projectId: string; message: string; context?: string } | null;
+  setLatestPreviewError: (error: { projectId: string; message: string; context?: string } | null) => void;
+  deviceMode: "desktop" | "tablet" | "mobile";
+  setDeviceMode: (mode: "desktop" | "tablet" | "mobile") => void;
+  cycleDeviceMode: () => void;
   projectHistory: ProjectHistoryItem[];
   loadProjectFromHistory: (item: ProjectHistoryItem) => void;
   deleteProjectFromHistory: (id: string) => void;
   activeProjectId: string | null;
   setActiveProjectId: (id: string | null) => void;
+  user: User | null;
+  loadingUser: boolean;
+  signIn: () => Promise<User>;
+  logout: () => Promise<void>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);
@@ -183,6 +201,26 @@ export default function App() {
 };
 
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [loadingUser, setLoadingUser] = useState(true);
+
+  const signIn = useCallback(async () => {
+    const u = await signInWithGoogle();
+    return u;
+  }, []);
+
+  const logout = useCallback(async () => {
+    await logoutUser();
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+      setLoadingUser(false);
+    });
+    return unsubscribe;
+  }, []);
+
   const [files, setFilesState] = useState<Record<string, { code: string }>>(() => {
     const savedActiveId = localStorage.getItem("ai-builder-active-project-id") || "default-veo-gallery";
     
@@ -221,11 +259,25 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [previewHtml, setPreviewHtml] = useState<string>("");
   const [logs, setLogs] = useState<LogLine[]>([]);
+  
+  const addLog = useCallback((text: string, type: LogLine["type"]) => {
+    setLogs((prev) => [...prev, { text, type }]);
+  }, []);
+
   const [prompt, setPrompt] = useState(() => localStorage.getItem("ai-builder-prompt") || "");
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inspectModeActive, setInspectModeActive] = useState(false);
   const [selectedElement, setSelectedElement] = useState<any | null>(null);
+  const [deviceMode, setDeviceMode] = useState<"desktop" | "tablet" | "mobile">("desktop");
+
+  const cycleDeviceMode = useCallback(() => {
+    setDeviceMode((prev) => {
+      if (prev === "desktop") return "tablet";
+      if (prev === "tablet") return "mobile";
+      return "desktop";
+    });
+  }, []);
 
   const [projectHistory, setProjectHistory] = useState<ProjectHistoryItem[]>(() => {
     try {
@@ -298,9 +350,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [layoutMode, setLayoutMode] = useState<"preview" | "code" | "split">("preview");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  const [latestPreviewError, setLatestPreviewError] = useState<{ message: string; context?: string } | null>(null);
+  const [latestPreviewError, setLatestPreviewError] = useState<{ projectId: string; message: string; context?: string } | null>(null);
   const [autoFixEnabled, setAutoFixEnabledState] = useState<boolean>(() => {
-    return localStorage.getItem("ai-builder-autofix-enabled") !== "false";
+    return localStorage.getItem("ai-builder-autofix-enabled") === "true";
   });
   const [isAutoFixing, setIsAutoFixing] = useState(false);
   const [autoFixAttempts, setAutoFixAttempts] = useState<Record<string, number>>({});
@@ -313,6 +365,189 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [mobileTab, setMobileTab] = useState<"chat" | "preview" | "settings">("preview");
   const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 768 : false);
   const [isTablet, setIsTablet] = useState(() => typeof window !== "undefined" ? (window.innerWidth >= 768 && window.innerWidth < 1024) : false);
+
+  // Load and sync projects from/to Firestore based on authentication state
+  useEffect(() => {
+    if (!user) {
+      // Load from local storage when logged out
+      try {
+        const savedHistory = localStorage.getItem("ai-builder-project-history");
+        if (savedHistory) {
+          const parsed = JSON.parse(savedHistory);
+          setProjectHistory(parsed);
+          const savedActiveId = localStorage.getItem("ai-builder-active-project-id") || "default-veo-gallery";
+          const activeProj = parsed.find((item: any) => item.id === savedActiveId);
+          if (activeProj) {
+            setFilesState(activeProj.files);
+            setActiveProjectIdState(savedActiveId);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load local history on logout:", e);
+      }
+      return;
+    }
+
+    const syncAndLoadProjects = async () => {
+      try {
+        addLog("☁ Syncing projects with Firestore...", "info");
+        const cloudProjects = await loadProjectsFromFirestore(user.uid);
+        
+        // Get local projects
+        const localHistoryStr = localStorage.getItem("ai-builder-project-history");
+        let localProjects: ProjectHistoryItem[] = [];
+        if (localHistoryStr) {
+          try {
+            localProjects = JSON.parse(localHistoryStr);
+          } catch (_) {}
+        }
+
+        // Merge local projects with cloud projects. 
+        // For any local project that isn't the default one and doesn't exist in cloud, save it to cloud.
+        const projectsToUpload = localProjects.filter(lp => 
+          lp.id !== "default-veo-gallery" && 
+          !cloudProjects.some(cp => cp.id === lp.id)
+        );
+
+        if (projectsToUpload.length > 0) {
+          addLog(`☁ Syncing ${projectsToUpload.length} local project(s) to secure cloud...`, "info");
+          for (const lp of projectsToUpload) {
+            await saveProjectToFirestore(lp.id, {
+              ...lp,
+              ownerId: user.uid
+            });
+            cloudProjects.push({ ...lp, ownerId: user.uid });
+          }
+        }
+
+        // Sort descending by timestamp
+        cloudProjects.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+        // Check deleted projects list so deleted starter templates don't reappear
+        const deletedRaw = localStorage.getItem("ai-builder-deleted-project-ids");
+        const deletedIds: string[] = deletedRaw ? JSON.parse(deletedRaw) : [];
+
+        const filteredCloud = cloudProjects.filter(p => !deletedIds.includes(p.id));
+
+        // Only include default starter template if it wasn't deleted and cloud is empty or missing default
+        const hasDefault = filteredCloud.some(p => p.id === "default-veo-gallery");
+        const isDefaultDeleted = deletedIds.includes("default-veo-gallery");
+        
+        let mergedHistory = filteredCloud;
+        if (!hasDefault && !isDefaultDeleted && filteredCloud.length === 0) {
+          mergedHistory = [
+            {
+              id: "default-veo-gallery",
+              prompt: "Veo Gallery - Powered by WebContainer AI",
+              timestamp: "2026-07-19T05:00:00.000Z",
+              files: INITIAL_FILES
+            },
+            ...filteredCloud
+          ];
+        }
+
+        setProjectHistory(mergedHistory);
+
+        // Load active project
+        const savedActiveId = localStorage.getItem("ai-builder-active-project-id");
+        const activeProj = mergedHistory.find(item => item.id === savedActiveId) || mergedHistory[0] || null;
+        
+        if (activeProj) {
+          setFilesState(activeProj.files);
+          setActiveProjectIdState(activeProj.id);
+          localStorage.setItem("stackblitz-workspace-files", JSON.stringify(activeProj.files));
+        } else {
+          setActiveProjectIdState(null);
+        }
+        
+        addLog("✔ Cloud projects synchronized successfully.", "success");
+      } catch (err) {
+        console.error("Error loading cloud projects:", err);
+        addLog("❌ Failed to synchronize cloud projects.", "error");
+      }
+    };
+
+    syncAndLoadProjects();
+  }, [user, addLog]);
+
+  // Debounced sync of active project files/content to Firestore
+  useEffect(() => {
+    if (!user || !activeProjectId || activeProjectId === "default-veo-gallery") return;
+
+    const timer = setTimeout(async () => {
+      const activeProj = projectHistory.find(item => item.id === activeProjectId);
+      if (activeProj) {
+        try {
+          await saveProjectToFirestore(activeProjectId, {
+            ...activeProj,
+            ownerId: user.uid
+          });
+        } catch (e) {
+          console.error("Failed to sync project to Firestore:", e);
+        }
+      }
+    }, 1500); // 1.5s debounce
+
+    return () => clearTimeout(timer);
+  }, [files, activeProjectId, user, projectHistory]);
+
+  // Load connectors configuration from Firestore on login
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchConnectors = async () => {
+      try {
+        const data = await loadConnectorsFromFirestore(user.uid);
+        if (data) {
+          if (data.connectors) {
+            localStorage.setItem("ai-builder-connectors-v1", JSON.stringify(data.connectors));
+            window.dispatchEvent(new Event("connectors-updated"));
+          }
+          if (data.selectedModelId) {
+            localStorage.setItem("ai-builder-selected-model-v1", data.selectedModelId);
+            window.dispatchEvent(new Event("selected-model-updated"));
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load connectors from cloud:", e);
+      }
+    };
+
+    fetchConnectors();
+  }, [user]);
+
+  // Sync connectors and selected model to Firestore when modified locally
+  useEffect(() => {
+    if (!user) return;
+
+    const syncConnectorsToCloud = async () => {
+      try {
+        const connectorsStr = localStorage.getItem("ai-builder-connectors-v1");
+        const selectedModelId = localStorage.getItem("ai-builder-selected-model-v1") || "gemini";
+        if (connectorsStr) {
+          const connectors = JSON.parse(connectorsStr);
+          await saveConnectorsToFirestore(user.uid, {
+            selectedModelId,
+            connectors
+          });
+        }
+      } catch (e) {
+        console.error("Failed to sync connectors to cloud:", e);
+      }
+    };
+
+    const handleConnectorsUpdated = () => {
+      syncConnectorsToCloud();
+    };
+
+    window.addEventListener("connectors-updated", handleConnectorsUpdated);
+    window.addEventListener("selected-model-updated", handleConnectorsUpdated);
+
+    return () => {
+      window.removeEventListener("connectors-updated", handleConnectorsUpdated);
+      window.removeEventListener("selected-model-updated", handleConnectorsUpdated);
+    };
+  }, [user]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -337,9 +572,11 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("ai-builder-prompt", prompt);
   }, [prompt]);
 
-  const addLog = useCallback((text: string, type: LogLine["type"]) => {
-    setLogs((prev) => [...prev, { text, type }]);
-  }, []);
+  // Reset preview error and auto-fixing state whenever active project changes
+  useEffect(() => {
+    setLatestPreviewError(null);
+    setIsAutoFixing(false);
+  }, [activeProjectId]);
 
   // Listen to messages from the sandbox iframe
   useEffect(() => {
@@ -347,12 +584,12 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       const data = event.data;
       if (data && data.type === "CONSOLE_LOG") {
         addLog(data.text, data.logType);
-        if (data.logType === "error") {
-          setLatestPreviewError({ message: data.text });
-        }
+      } else if (data && data.type === "UNCAUGHT_RUNTIME_ERROR") {
+        addLog(`❌ Uncaught Runtime Error: ${data.message}`, "error");
+        setLatestPreviewError({ projectId: activeProjectId || "default", message: data.message, context: data.stack });
       } else if (data && data.type === "PREVIEW_BOOT_ERROR") {
         addLog(`❌ Sandbox Boot Failure: ${data.message}`, "error");
-        setLatestPreviewError({ message: data.message, context: data.stack });
+        setLatestPreviewError({ projectId: activeProjectId || "default", message: data.message, context: data.stack });
       } else if (data && data.type === "ELEMENT_CLICKED") {
         setSelectedElement(data.element);
       }
@@ -361,7 +598,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     return () => {
       window.removeEventListener("message", handleMessage);
     };
-  }, [addLog]);
+  }, [addLog, activeProjectId]);
 
   const clearLogs = useCallback(() => {
     setLogs([]);
@@ -372,27 +609,44 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     addLog("⚡ Starting compilation of virtual workspace...", "command");
     
     const compiledModules: Record<string, string> = {};
+    let hasTranspilationError = false;
 
     for (const [path, data] of Object.entries(files)) {
       const fileData = data as { code: string };
-      if (path.endsWith(".css") || path.endsWith(".json")) {
+      // Skip non-transpilable files (HTML, CSS, JSON, SVG, images, etc.)
+      if (!/\.(js|jsx|ts|tsx|mjs|cjs)$/i.test(path)) {
         continue;
       }
       try {
+        const isTs = /\.(ts|tsx)$/i.test(path);
+        const isTsx = /\.tsx$/i.test(path);
+
+        const presets: any[] = [
+          ["env", { modules: "commonjs" }],
+          ["react", { runtime: "automatic" }]
+        ];
+
+        if (isTs) {
+          presets.push(["typescript", { isTSX: isTsx, allExtensions: true, allowNamespaces: true }]);
+        } else {
+          presets.push("typescript");
+        }
+
         const res = Babel.transform(fileData.code, {
-          presets: [
-            ["env", { modules: "commonjs" }],
-            "react",
-            "typescript"
-          ],
+          presets,
           filename: path
         });
         compiledModules[path] = res.code || "";
       } catch (err: any) {
+        hasTranspilationError = true;
         addLog(`❌ Transpilation error in ${path}: ${err.message}`, "error");
         compiledModules[path] = `throw new Error(${JSON.stringify(`Transpilation error in ${path}: ` + err.message)});`;
-        setLatestPreviewError({ message: `Transpilation error in ${path}: ${err.message}`, context: err.stack });
+        setLatestPreviewError({ projectId: activeProjectId || "default", message: `Transpilation error in ${path}: ${err.message}`, context: err.stack });
       }
+    }
+
+    if (!hasTranspilationError) {
+      setLatestPreviewError(null);
     }
 
     try {
@@ -442,7 +696,13 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       };
 
       window.addEventListener("error", (e) => {
-        window.parent.postMessage({ type: "CONSOLE_LOG", text: "Runtime Error: " + e.message, logType: "error" }, "*");
+        console.error("Uncaught runtime error:", e.error || e.message);
+        window.parent.postMessage({ type: "UNCAUGHT_RUNTIME_ERROR", message: e.message, stack: e.error ? e.error.stack : "" }, "*");
+      });
+
+      window.addEventListener("unhandledrejection", (e) => {
+        console.error("Unhandled promise rejection:", e.reason);
+        window.parent.postMessage({ type: "UNCAUGHT_RUNTIME_ERROR", message: String(e.reason?.message || e.reason), stack: e.reason?.stack || "" }, "*");
       });
 
       window.__INSPECT_MODE_ACTIVE__ = false;
@@ -547,9 +807,24 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           window.parent.postMessage({ type: "ELEMENT_CLICKED", element: info }, "*");
         }, true);
       });
-
-      window.__COMPILED_MODULES__ = ${modulesJson};
-      window.__RAW_FILES__ = ${rawFilesJson};
+    </script>
+    <script id="__COMPILED_MODULES_DATA__" type="application/json">
+      ${modulesJson}
+    </script>
+    <script id="__RAW_FILES_DATA__" type="application/json">
+      ${rawFilesJson}
+    </script>
+    <script>
+      try {
+        window.__COMPILED_MODULES__ = JSON.parse(document.getElementById("__COMPILED_MODULES_DATA__").textContent || "{}");
+      } catch (e) {
+        window.__COMPILED_MODULES__ = {};
+      }
+      try {
+        window.__RAW_FILES__ = JSON.parse(document.getElementById("__RAW_FILES_DATA__").textContent || "{}");
+      } catch (e) {
+        window.__RAW_FILES__ = {};
+      }
     </script>
   </head>
   <body>
@@ -561,10 +836,14 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       const loadedLibs = {};
 
       function findFileKey(targetPath) {
+        if (!targetPath) return null;
+        if (targetPath.startsWith("@/")) {
+          targetPath = "/src/" + targetPath.substring(2);
+        }
         if (modules[targetPath] !== undefined || rawFiles[targetPath] !== undefined) {
           return targetPath;
         }
-        const extensions = ["", ".tsx", ".ts", ".jsx", ".js", ".css", ".json"];
+        const extensions = ["", ".tsx", ".ts", ".jsx", ".js", ".css", ".json", ".d.ts", "/index.tsx", "/index.ts", "/index.jsx", "/index.js"];
         for (const ext of extensions) {
           const baseCandidate = targetPath + ext;
           const candidates = [baseCandidate];
@@ -622,7 +901,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
       function requireModule(fromPath, targetPath) {
         let resolvedPath = targetPath;
-        if (targetPath.startsWith(".")) {
+        if (targetPath.startsWith("@/")) {
+          resolvedPath = "/src/" + targetPath.substring(2);
+          resolvedPath = findFileKey(resolvedPath) || resolvedPath;
+        } else if (targetPath.startsWith(".")) {
           resolvedPath = resolveRelativePath(fromPath, targetPath);
         } else if (targetPath.startsWith("/")) {
           resolvedPath = findFileKey(targetPath) || targetPath;
@@ -645,7 +927,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
         if (resolvedPath.endsWith(".json")) {
           try {
-            return JSON.parse(rawFiles[resolvedPath]);
+            return JSON.parse(rawFiles[resolvedPath] || "{}");
           } catch (err) {
             return {};
           }
@@ -655,16 +937,43 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           if (loadedLibs[resolvedPath]) {
             return loadedLibs[resolvedPath];
           }
+          if (resolvedPath.startsWith("react/")) {
+            return loadedLibs["react"] || {};
+          }
+          if (resolvedPath.startsWith("lucide-react/")) {
+            return loadedLibs["lucide-react"] || {};
+          }
+          if (resolvedPath.startsWith("react-router-dom/")) {
+            return loadedLibs["react-router-dom"] || {};
+          }
+          const basePkg = resolvedPath.startsWith("@") ? resolvedPath.split("/").slice(0, 2).join("/") : resolvedPath.split("/")[0];
+          if (loadedLibs[basePkg]) {
+            return loadedLibs[basePkg];
+          }
+
           const workspaceKey = findFileKey(resolvedPath);
           if (workspaceKey && workspaceKey.startsWith("/")) {
             return requireModule(fromPath, workspaceKey);
           }
-          throw new Error("External package not pre-loaded: " + resolvedPath);
+          console.warn("External package missing, returning empty fallback module:", resolvedPath);
+          return loadedLibs[resolvedPath] || {};
         }
 
-        const code = modules[resolvedPath];
+        let code = modules[resolvedPath];
         if (code === undefined) {
-          throw new Error("Cannot find module: " + resolvedPath);
+          const matchedKey = findFileKey(resolvedPath);
+          if (matchedKey && modules[matchedKey] !== undefined) {
+            resolvedPath = matchedKey;
+            code = modules[matchedKey];
+          }
+        }
+
+        if (code === undefined) {
+          if (rawFiles[resolvedPath] !== undefined) {
+            return {};
+          }
+          console.warn("Module not found in virtual workspace, returning empty fallback module:", resolvedPath);
+          return {};
         }
 
         const module = { exports: {} };
@@ -677,7 +986,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           fn(localRequire, module, module.exports);
         } catch (err) {
           console.error("Runtime execution error in " + resolvedPath + ":", err);
-          throw err;
+          return module.exports || {};
         }
 
         return module.exports;
@@ -707,6 +1016,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           while ((match = requireRegex.exec(code)) !== null) {
             const dep = match[2];
             if (!dep.startsWith(".") && !dep.startsWith("/")) {
+              const basePkg = dep.startsWith("@") ? dep.split("/").slice(0, 2).join("/") : dep.split("/")[0];
+              externals.add(basePkg);
               externals.add(dep);
             }
           }
@@ -715,6 +1026,11 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         externals.add("react");
         externals.add("react-dom");
         externals.add("react-dom/client");
+        externals.add("lucide-react");
+        externals.add("clsx");
+        externals.add("tailwind-merge");
+        externals.add("framer-motion");
+        externals.add("react-router-dom");
 
         await Promise.all(
           Array.from(externals).map(async (lib) => {
@@ -722,10 +1038,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
             if (lib === "react") url = "https://esm.sh/react@19";
             else if (lib === "react-dom") url = "https://esm.sh/react-dom@19";
             else if (lib === "react-dom/client") url = "https://esm.sh/react-dom@19/client";
-            else if (lib === "lucide-react") url = "https://esm.sh/lucide-react@0.468.0";
-            else if (lib === "motion/react") url = "https://esm.sh/motion/react@12.0.0-alpha.2";
-            else if (lib === "framer-motion") url = "https://esm.sh/framer-motion@11.15.0";
-            else url = "https://esm.sh/" + lib;
+            else if (lib === "lucide-react") url = "https://esm.sh/lucide-react@0.468.0?external=react,react-dom";
+            else if (lib === "motion/react") url = "https://esm.sh/motion/react@12.0.0-alpha.2?external=react,react-dom";
+            else if (lib === "framer-motion") url = "https://esm.sh/framer-motion@11.15.0?external=react,react-dom";
+            else url = "https://esm.sh/" + lib + "?external=react,react-dom";
 
             try {
               const mod = await import(url);
@@ -737,23 +1053,85 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         );
 
         try {
-          const entryKeys = ["/src/main.tsx", "/src/App.tsx", "/App.tsx", "/src/index.tsx", "/index.tsx"];
-          const entryKey = entryKeys.find(key => modules[key] !== undefined || rawFiles[key] !== undefined) || Object.keys(modules)[0];
+          // Check for App component first, or main entry point
+          const appComponentKeys = ["/src/App.tsx", "/App.tsx", "/src/App.jsx", "/App.jsx"];
+          const appComponentKey = appComponentKeys.find(key => modules[key] !== undefined);
 
-          if (!entryKey) {
-            throw new Error("No files found in virtual workspace.");
+          let AppComponent: any = null;
+          if (appComponentKey) {
+            const appExports = requireModule("/", appComponentKey);
+            AppComponent = appExports.default || appExports;
+          } else {
+            const entryKeys = ["/src/main.tsx", "/src/index.tsx", "/src/App.tsx", "/App.tsx", "/index.tsx"];
+            const entryKey = entryKeys.find(key => modules[key] !== undefined || rawFiles[key] !== undefined) || Object.keys(modules)[0];
+
+            if (!entryKey) {
+              throw new Error("No files found in virtual workspace.");
+            }
+
+            const entryExports = requireModule("/", entryKey);
+            AppComponent = entryExports.default || entryExports;
           }
 
-          const entryExports = requireModule("/", entryKey);
-          const AppComponent = entryExports.default || entryExports;
+          // Verify if AppComponent is a valid React component (function or object with $$typeof / render)
+          const isValidComponent = typeof AppComponent === "function" ||
+            (typeof AppComponent === "object" && AppComponent !== null && (AppComponent.$$typeof || typeof AppComponent.render === "function"));
 
-          if (AppComponent) {
+          if (isValidComponent) {
             const React = loadedLibs["react"];
             const ReactDOMClient = loadedLibs["react-dom/client"];
+
+            class ErrorBoundary extends React.Component {
+              constructor(props) {
+                super(props);
+                this.state = { hasError: false, error: null };
+              }
+              static getDerivedStateFromError(error) {
+                return { hasError: true, error };
+              }
+              componentDidCatch(error, errorInfo) {
+                console.error("React render error caught by ErrorBoundary:", error, errorInfo);
+                window.parent.postMessage({
+                  type: "UNCAUGHT_RUNTIME_ERROR",
+                  message: error.message || String(error),
+                  stack: (errorInfo && errorInfo.componentStack) || error.stack || ""
+                }, "*");
+              }
+              render() {
+                if (this.state.hasError) {
+                  return React.createElement("div", {
+                    style: {
+                      padding: "24px",
+                      color: "#f87171",
+                      backgroundColor: "#121217",
+                      border: "1px solid #27272a",
+                      borderRadius: "16px",
+                      margin: "20px",
+                      fontFamily: "system-ui, sans-serif",
+                      fontSize: "13px",
+                      lineHeight: "1.6"
+                    }
+                  },
+                    React.createElement("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" } },
+                      React.createElement("span", { style: { fontSize: "18px" } }, "⚠️"),
+                      React.createElement("h3", { style: { margin: 0, color: "#f87171", fontSize: "15px", fontWeight: "700" } }, "Preview Component Error")
+                    ),
+                    React.createElement("p", { style: { margin: "0 0 12px 0", color: "#d4d4d8" } }, this.state.error?.message || "An unexpected error occurred during rendering."),
+                    React.createElement("pre", { style: { overflowX: "auto", fontSize: "11px", fontFamily: "monospace", color: "#a1a1aa", backgroundColor: "#09090b", padding: "12px", borderRadius: "8px", border: "1px solid #18181b" } }, this.state.error?.stack || "")
+                  );
+                }
+                return this.props.children;
+              }
+            }
+
             const root = ReactDOMClient.createRoot(document.getElementById("root"));
-            root.render(React.createElement(AppComponent));
+            root.render(React.createElement(ErrorBoundary, null, React.createElement(AppComponent)));
           } else {
-            throw new Error("Entry point module did not export a default component.");
+            // If main.tsx was required and executed createRoot directly, nothing more needed if root has children
+            const rootEl = document.getElementById("root");
+            if (!rootEl || rootEl.children.length === 0) {
+              console.warn("Entry point did not produce a default export component or mount to #root.");
+            }
           }
         } catch (err) {
           console.error("Failed to boot applet:", err);
@@ -926,6 +1304,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     setPrompt(item.prompt);
     setPreviewHtml("");
     setPreviewUrl("");
+    setLatestPreviewError(null);
+    setLogs([]);
     
     const keys = Object.keys(item.files);
     const appKey = keys.find(k => k.endsWith("App.tsx") || k.endsWith("App.js")) || keys[0];
@@ -940,23 +1320,52 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     }, 100);
   }, [openFile, runPreview, addLog, setActiveProjectId]);
 
-  const deleteProjectFromHistory = useCallback((id: string) => {
+  const deleteProjectFromHistory = useCallback(async (id: string) => {
+    // Record deleted project ID
+    try {
+      const deletedRaw = localStorage.getItem("ai-builder-deleted-project-ids");
+      const deletedIds: string[] = deletedRaw ? JSON.parse(deletedRaw) : [];
+      if (!deletedIds.includes(id)) {
+        deletedIds.push(id);
+        localStorage.setItem("ai-builder-deleted-project-ids", JSON.stringify(deletedIds));
+      }
+    } catch (e) {
+      console.error("Failed to save deleted project ID:", e);
+    }
+
     setProjectHistory((prev) => {
       const updated = prev.filter((item) => item.id !== id);
       localStorage.setItem("ai-builder-project-history", JSON.stringify(updated));
       return updated;
     });
+
+    if (user) {
+      try {
+        await deleteProjectFromFirestore(id);
+      } catch (e) {
+        console.error("Failed to delete project from Firestore:", e);
+      }
+    }
+
     setActiveProjectIdState((curr) => {
       if (curr === id) {
-        return "default-veo-gallery";
+        const remaining = projectHistory.filter((item) => item.id !== id);
+        const nextId = remaining.length > 0 ? remaining[0].id : null;
+        if (nextId) {
+          localStorage.setItem("ai-builder-active-project-id", nextId);
+        } else {
+          localStorage.removeItem("ai-builder-active-project-id");
+        }
+        return nextId;
       }
       return curr;
     });
-  }, [setActiveProjectIdState]);
+  }, [setActiveProjectIdState, user, projectHistory]);
 
   const triggerGeneration = async (customPrompt?: string, isIncremental: boolean = false) => {
     const activePrompt = customPrompt !== undefined ? customPrompt : prompt;
-    if (!activePrompt.trim() || isGenerating) return;
+    if (!activePrompt.trim()) return;
+    if (isGenerating && isIncremental) return;
 
     setIsGenerating(true);
     setError(null);
@@ -988,40 +1397,56 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           normalized[path] = { code: typeof val === "string" ? val : (val as any).code || "" };
         });
 
-        setFiles(normalized);
-        addLog("✔ Generation completed successfully! Injecting new workspace files.", "success");
-        
         if (!isIncremental) {
-          // Add to history list
           const newId = Date.now().toString();
-          const newHistoryItem: ProjectHistoryItem = {
-            id: newId,
-            prompt: activePrompt,
-            timestamp: new Date().toISOString(),
-            files: normalized
-          };
-          setProjectHistory((prev) => {
-            const filtered = prev.filter(item => item.prompt !== activePrompt);
-            const updated = [newHistoryItem, ...filtered];
-            localStorage.setItem("ai-builder-project-history", JSON.stringify(updated));
-            return updated;
-          });
           setActiveProjectId(newId);
-        } else if (!activeProjectId) {
-          const newId = Date.now().toString();
+
           const newHistoryItem: ProjectHistoryItem = {
             id: newId,
             prompt: activePrompt,
             timestamp: new Date().toISOString(),
             files: normalized
           };
+
           setProjectHistory((prev) => {
             const updated = [newHistoryItem, ...prev];
             localStorage.setItem("ai-builder-project-history", JSON.stringify(updated));
             return updated;
           });
-          setActiveProjectId(newId);
+
+          setFilesState(normalized);
+          localStorage.setItem("stackblitz-workspace-files", JSON.stringify(normalized));
+
+          if (user) {
+            saveProjectToFirestore(newId, { ...newHistoryItem, ownerId: user.uid }).catch(e => 
+              console.error("Failed to save generated project to Firestore:", e)
+            );
+          }
+        } else {
+          setFiles(normalized);
+          if (!activeProjectId) {
+            const newId = Date.now().toString();
+            const newHistoryItem: ProjectHistoryItem = {
+              id: newId,
+              prompt: activePrompt,
+              timestamp: new Date().toISOString(),
+              files: normalized
+            };
+            setProjectHistory((prev) => {
+              const updated = [newHistoryItem, ...prev];
+              localStorage.setItem("ai-builder-project-history", JSON.stringify(updated));
+              return updated;
+            });
+            setActiveProjectId(newId);
+            if (user) {
+              saveProjectToFirestore(newId, { ...newHistoryItem, ownerId: user.uid }).catch(e => 
+                console.error("Failed to save generated project to Firestore:", e)
+              );
+            }
+          }
         }
+
+        addLog("✔ Generation completed successfully! Injecting new workspace files.", "success");
 
         // Find a suitable App.tsx or similar
         const keys = Object.keys(normalized);
@@ -1091,11 +1516,13 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     const cleanMsg = errorMessage.split("\n")[0];
     const attempts = autoFixAttempts[cleanMsg] || 0;
     if (attempts >= 3) {
-      addLog(`⚠️ Auto-fix limit exceeded for error: "${cleanMsg}". Please check settings or fix manually.`, "info");
+      addLog(`⚠️ Auto-fix limit reached for this error. Please review your code manually.`, "info");
+      setLatestPreviewError(null);
       return;
     }
 
     setIsAutoFixing(true);
+    setLatestPreviewError(null);
     addLog(`🔧 AI Auto-Fix: Diagnosing and repairing error: "${cleanMsg}"...`, "command");
 
     try {
@@ -1115,7 +1542,6 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       });
 
       setFiles(normalized);
-      setLatestPreviewError(null);
       addLog("✔ Auto-fix complete! Re-compiling preview...", "success");
 
       setTimeout(() => {
@@ -1128,16 +1554,6 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       setIsAutoFixing(false);
     }
   }, [files, isAutoFixing, isGenerating, autoFixAttempts, runPreview, addLog]);
-
-  useEffect(() => {
-    if (!latestPreviewError || !autoFixEnabled || isAutoFixing || isGenerating) return;
-
-    const timer = setTimeout(() => {
-      triggerAutoFix(latestPreviewError.message, latestPreviewError.context);
-    }, 1200);
-
-    return () => clearTimeout(timer);
-  }, [latestPreviewError, autoFixEnabled, triggerAutoFix, isAutoFixing, isGenerating]);
 
   const resetWorkspace = useCallback(() => {
     localStorage.removeItem("stackblitz-workspace-files");
@@ -1202,11 +1618,18 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         triggerAutoFix,
         latestPreviewError,
         setLatestPreviewError,
+        deviceMode,
+        setDeviceMode,
+        cycleDeviceMode,
         projectHistory,
         loadProjectFromHistory,
         deleteProjectFromHistory,
         activeProjectId,
         setActiveProjectId,
+        user,
+        loadingUser,
+        signIn,
+        logout,
       }}
     >
       {children}

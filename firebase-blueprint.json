@@ -1,0 +1,62 @@
+{
+  "entities": {
+    "Project": {
+      "title": "Project",
+      "description": "A workspace project containing multiple source files and metadata",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The unique ID of the project"
+        },
+        "prompt": {
+          "type": "string",
+          "description": "The initial or current prompt driving the project"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "ISO timestamp representing the project's last update"
+        },
+        "files": {
+          "type": "object",
+          "description": "The complete directory structure with source file codes"
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "The Firebase Auth UID of the project owner"
+        }
+      },
+      "required": ["id", "prompt", "timestamp", "files", "ownerId"]
+    },
+    "ConnectorsConfig": {
+      "title": "ConnectorsConfig",
+      "description": "User custom API connectors and credentials configuration",
+      "type": "object",
+      "properties": {
+        "selectedModelId": {
+          "type": "string",
+          "description": "The active LLM driver selected by the user"
+        },
+        "connectors": {
+          "type": "array",
+          "description": "The list of custom API connectors including BYOK apiKeys"
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "The Firebase Auth UID of the config owner"
+        }
+      },
+      "required": ["selectedModelId", "connectors", "ownerId"]
+    }
+  },
+  "firestore": {
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "User generated coding projects"
+    },
+    "/users/{userId}/private/connectors": {
+      "schema": "ConnectorsConfig",
+      "description": "Protected private configuration and keys for individual users"
+    }
+  }
+}

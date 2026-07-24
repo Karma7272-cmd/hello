@@ -33,13 +33,19 @@ import {
   Zap,
   MousePointerClick,
   Columns,
-  Cloud
+  Cloud,
+  Trash2,
+  Tablet,
+  Smartphone,
+  Wand2,
+  Wrench
 } from "lucide-react";
 import { WorkspaceProvider, useWorkspace } from "./context/WorkspaceContext";
 import StackBlitzWorkspace from "./components/StackBlitzWorkspace";
 import HomePage from "./components/HomePage";
 import MobileSettingsView from "./components/MobileSettingsView";
 import CloudConnectorsPopup from "./components/CloudConnectorsPopup";
+import { AILoadBalancerModal } from "./components/AILoadBalancerModal";
 import { cn } from "./lib/utils";
 
 function AppContent() {
@@ -67,10 +73,31 @@ function AppContent() {
     setMobileTab,
     selectedElement,
     setSelectedElement,
-    triggerElementEdit
+    triggerElementEdit,
+    user,
+    loadingUser,
+    signIn,
+    logout,
+    projectHistory,
+    loadProjectFromHistory,
+    deleteProjectFromHistory,
+    activeProjectId,
+    setActiveProjectId,
+    deviceMode,
+    setDeviceMode,
+    cycleDeviceMode,
+    isAutoFixing,
+    autoFixEnabled,
+    setAutoFixEnabled,
+    triggerAutoFix,
+    latestPreviewError,
+    runPreview
   } = useWorkspace();
 
+  const [isReloading, setIsReloading] = useState(false);
   const [view, setView] = useState<"home" | "ide">("home");
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isWorkspaceDropdownOpen, setIsWorkspaceDropdownOpen] = useState(false);
 
   // Editable title state
   const [title, setTitle] = useState("AI Web Builder IDE");
@@ -78,6 +105,57 @@ function AppContent() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [simulateTablet, setSimulateTablet] = useState(false);
   const [isConnectorsOpen, setIsConnectorsOpen] = useState(false);
+  const [isLoadBalancerOpen, setIsLoadBalancerOpen] = useState(false);
+
+  // Interactive message history matching the active workspace
+  const [messages, setMessages] = useState<Array<{
+    id: string;
+    sender: "user" | "gemini";
+    text: string;
+    modelInfo?: string;
+    duration?: string;
+    checkpoint?: boolean;
+    isStatus?: boolean;
+  }>>([]);
+
+  // Load chat messages specifically for the active workspace
+  useEffect(() => {
+    if (!activeProjectId) return;
+    try {
+      const saved = localStorage.getItem(`ai-builder-messages-${activeProjectId}`);
+      if (saved) {
+        setMessages(JSON.parse(saved));
+        return;
+      }
+    } catch (e) {
+      console.error("Failed to parse saved workspace messages:", e);
+    }
+
+    const proj = projectHistory.find((p) => p.id === activeProjectId);
+    setMessages([
+      {
+        id: "1",
+        sender: "gemini",
+        modelInfo: "Gemini 3.6 Flash",
+        duration: "Ready",
+        checkpoint: true,
+        text: proj
+          ? `• **Workspace active**: "${proj.prompt}".\n\nAll files for this website are isolated in this workspace. Any prompts or code edits here will modify only this website.`
+          : `Welcome to your AI Web Workspace! Enter a prompt below to build or customize this website.`
+      }
+    ]);
+  }, [activeProjectId]);
+
+  // Save messages whenever they change for the active workspace
+  useEffect(() => {
+    if (activeProjectId && messages.length > 0) {
+      try {
+        localStorage.setItem(`ai-builder-messages-${activeProjectId}`, JSON.stringify(messages));
+      } catch (e) {
+        console.error("Failed to save workspace messages:", e);
+      }
+    }
+  }, [messages, activeProjectId]);
 
   const handleHomeSubmit = async (promptText: string) => {
     setPrompt(promptText);
@@ -93,17 +171,17 @@ function AppContent() {
     ]);
 
     try {
-      await triggerGeneration(promptText);
+      await triggerGeneration(promptText, false);
 
       setMessages((prev) => [
         ...prev,
         {
           id: (Date.now() + 1).toString(),
           sender: "gemini",
-          modelInfo: "Gemini 3.5 Flash",
+          modelInfo: "Gemini 3.6 Flash",
           duration: "Ran for 12s",
           checkpoint: true,
-          text: `I have updated the workspace with the requested features:
+          text: `I have created your new separated workspace and updated it with the requested features:
 • Built a customized layout update matching: **${promptText}**.
 • Modified appropriate files with correct React hooks and Tailwind utility declarations.
 • Automatically recompiled the local preview server. You can view the live result in the preview tab!`
@@ -115,40 +193,13 @@ function AppContent() {
         {
           id: (Date.now() + 1).toString(),
           sender: "gemini",
-          modelInfo: "Gemini 3.5 Flash",
+          modelInfo: "Gemini 3.6 Flash",
           duration: "Failed",
           text: `❌ Generation failed: ${err.message || "Unknown error occurring during synthesis."}`
         }
       ]);
     }
   };
-
-  // Interactive message history matching the screenshot perfectly
-  const [messages, setMessages] = useState<Array<{
-    id: string;
-    sender: "user" | "gemini";
-    text: string;
-    modelInfo?: string;
-    duration?: string;
-    checkpoint?: boolean;
-    isStatus?: boolean;
-  }>>([
-    {
-      id: "1",
-      sender: "gemini",
-      modelInfo: "Gemini 3.5 Flash",
-      duration: "Ran for 98s",
-      checkpoint: true,
-      text: `• **Implemented folder-aware recursive deletions**: Deleting a folder now automatically purges all descendant files and sub-folders (e.g. paths matching \`/folder/*\`).
-
-2. **Tab and Active Focus Synchronization**:
-   • Deleting a folder/file now filters the active tabs to remove deleted entries.
-   • If the active file itself or a file inside the deleted folder was open, the editor safely shifts focus to another remaining file (preferring \`App.tsx\` or \`App.js\`, or the first available key).
-
-3. **Debounced Auto-Compilation**:
-   • Added a debounced \`useEffect\` compiler hook that triggers \`runPreview\` 800ms after files are modified, created, or deleted. This guarantees that your live preview iframe compiles and refreshes in real-time immediately after you make any structural modifications or deletions.`
-    }
-  ]);
 
   // Suggestion chips matching screenshot
   const [suggestions, setSuggestions] = useState([
@@ -274,10 +325,10 @@ function AppContent() {
     <div className="h-screen w-full bg-[#0c0c0c] text-neutral-200 flex flex-col font-sans overflow-hidden">
       
       {/* Top Header matching user screenshot exactly */}
-      <header className="h-14 flex items-center justify-between px-4 shrink-0 bg-[#121214] z-20 border-b border-[#222]">
+      <header className="h-14 flex items-center justify-between px-3 sm:px-4 shrink-0 bg-[#121214] z-20 border-b border-[#222] overflow-x-auto overflow-y-hidden max-w-full custom-scrollbar gap-2 sm:gap-4 select-none">
         
         {/* Left Side: Navigation, Title & Layout switchers */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0 overflow-x-auto overflow-y-hidden py-1 custom-scrollbar">
           {/* Back Button */}
           <button 
             onClick={() => setView("home")}
@@ -314,13 +365,111 @@ function AppContent() {
             )}
           </div>
 
-          <div className="h-4 w-px bg-[#2d2d2d] hidden sm:block" />
+          <div className="h-4 w-px bg-[#2d2d2d] shrink-0" />
+
+          {/* Workspace Switcher Dropdown */}
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setIsWorkspaceDropdownOpen(!isWorkspaceDropdownOpen)}
+              className="flex items-center gap-1.5 bg-[#1c1c20] hover:bg-[#26262b] border border-[#2d2d35] text-xs font-semibold px-2.5 py-1 rounded-lg text-neutral-200 transition-all cursor-pointer max-w-[140px] sm:max-w-[200px]"
+              title="Switch or create separated website workspace"
+            >
+              <Layers className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <span className="truncate">
+                {projectHistory.find(p => p.id === activeProjectId)?.prompt || "Workspace"}
+              </span>
+              <ChevronDown className="w-3 h-3 text-neutral-400 shrink-0 ml-0.5" />
+            </button>
+
+            {isWorkspaceDropdownOpen && (
+              <>
+                <div 
+                  className="fixed inset-0 z-40" 
+                  onClick={() => setIsWorkspaceDropdownOpen(false)} 
+                />
+                <div 
+                  className="absolute top-full left-0 mt-2 w-72 sm:w-80 bg-[#141417] border border-[#2d2d35] rounded-xl shadow-2xl z-50 p-2 space-y-1 text-xs"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between px-2 py-1.5 border-b border-[#242429] mb-1">
+                    <div className="flex items-center gap-1.5 font-bold text-neutral-300">
+                      <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>My Workspaces</span>
+                      <span className="bg-indigo-500/20 text-indigo-300 text-[10px] px-1.5 py-0.5 rounded-full font-mono">
+                        {projectHistory.length}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setIsWorkspaceDropdownOpen(false);
+                        setView("home");
+                      }}
+                      className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-[11px] px-2 py-1 rounded-md transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>New Site</span>
+                    </button>
+                  </div>
+
+                  <div className="max-h-60 overflow-y-auto space-y-1 custom-scrollbar pr-1">
+                    {projectHistory.map((proj) => {
+                      const isActive = proj.id === activeProjectId;
+                      return (
+                        <div
+                          key={proj.id}
+                          onClick={() => {
+                            loadProjectFromHistory(proj);
+                            setIsWorkspaceDropdownOpen(false);
+                          }}
+                          className={cn(
+                            "group flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all text-left",
+                            isActive
+                              ? "bg-indigo-600/20 border border-indigo-500/40 text-white font-medium shadow-sm"
+                              : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60"
+                          )}
+                        >
+                          <div className="flex items-center gap-2 min-w-0 pr-2">
+                            <Sparkles className={cn("w-3.5 h-3.5 shrink-0", isActive ? "text-indigo-400" : "text-neutral-500")} />
+                            <div className="min-w-0">
+                              <div className="truncate font-medium text-xs leading-tight">{proj.prompt}</div>
+                              <div className="text-[10px] text-neutral-500 mt-0.5">
+                                {new Date(proj.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {isActive && (
+                              <span className="w-2 h-2 rounded-full bg-emerald-400 ring-4 ring-emerald-400/20" title="Active Workspace" />
+                            )}
+                            {projectHistory.length > 1 && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteProjectFromHistory(proj.id);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 p-1 text-neutral-500 hover:text-red-400 hover:bg-neutral-800/80 rounded transition-all cursor-pointer"
+                                title="Delete workspace"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="h-4 w-px bg-[#2d2d2d] shrink-0" />
 
           {/* Sidebar Toggle button matching screenshot */}
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             className={cn(
-              "hidden sm:block p-2 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition-all cursor-pointer shrink-0",
+              "p-2 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition-all cursor-pointer shrink-0",
               isSidebarOpen && "text-white bg-neutral-800/40"
             )}
             title={isSidebarOpen ? "Collapse Gemini Assistant" : "Expand Gemini Assistant"}
@@ -334,37 +483,59 @@ function AppContent() {
             <button 
               onClick={() => setLayoutMode("preview")}
               className={cn(
-                "px-2 sm:px-3.5 py-1 text-[11px] font-bold rounded-full transition-all flex items-center gap-0 sm:gap-1.5 cursor-pointer",
+                "px-2 sm:px-3.5 py-1 text-[11px] font-bold rounded-full transition-all flex items-center gap-1 cursor-pointer",
                 layoutMode === "preview" 
                   ? "bg-[#1d4ed8]/30 border border-[#2563eb]/40 text-[#4285f4] shadow-sm" 
                   : "text-neutral-500 hover:text-neutral-300"
               )}
             >
-              <Globe className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Preview</span>
+              <Globe className="w-3.5 h-3.5 shrink-0" />
+              <span>Preview</span>
             </button>
             
-            {/* Inspect / Select Element Mode */}
+            {/* Auto Fix Errors Icon Button */}
             <button 
-              onClick={() => setInspectModeActive(!inspectModeActive)}
+              id="desktop-sidebar-inspect-btn"
+              onClick={() => {
+                if (latestPreviewError) {
+                  triggerAutoFix(latestPreviewError.message, latestPreviewError.context);
+                } else {
+                  setAutoFixEnabled(!autoFixEnabled);
+                }
+              }}
               className={cn(
-                "p-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center",
-                inspectModeActive 
-                  ? "text-indigo-400 bg-indigo-500/10 border border-indigo-500/20" 
+                "p-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center shrink-0 relative",
+                isAutoFixing
+                  ? "text-amber-400 bg-amber-500/20 border border-amber-500/30 animate-pulse"
+                  : latestPreviewError
+                  ? "text-red-400 bg-red-500/20 border border-red-500/40 animate-bounce"
+                  : autoFixEnabled 
+                  ? "text-indigo-400 bg-indigo-500/15 border border-indigo-500/30" 
                   : "text-neutral-500 hover:text-neutral-300"
               )}
-              title="Select Element to edit (AI)"
+              title={
+                isAutoFixing
+                  ? "Auto-Fixing preview errors..."
+                  : latestPreviewError
+                  ? `Click to Auto-Fix Error: ${latestPreviewError.message}`
+                  : autoFixEnabled
+                  ? "Auto-Fix Errors: Enabled (Click to toggle)"
+                  : "Auto-Fix Errors: Disabled (Click to enable)"
+              }
             >
-              <MousePointerClick className="w-3.5 h-3.5" />
+              <Wand2 className={cn("w-3.5 h-3.5", isAutoFixing && "animate-spin")} />
+              {latestPreviewError && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
+              )}
             </button>
 
-            <div className="h-4 w-px bg-[#2d2d2d]/80 hidden sm:block" />
+            <div className="h-4 w-px bg-[#2d2d2d]/80 shrink-0" />
 
             {/* Code Only tab */}
             <button 
               onClick={() => setLayoutMode("code")}
               className={cn(
-                "hidden sm:flex p-1 rounded-lg transition-all cursor-pointer items-center justify-center font-mono text-[10px] leading-none shrink-0 font-bold px-1.5",
+                "flex p-1 rounded-lg transition-all cursor-pointer items-center justify-center font-mono text-[10px] leading-none shrink-0 font-bold px-1.5",
                 layoutMode === "code" 
                   ? "text-white bg-neutral-800/40" 
                   : "text-neutral-500 hover:text-neutral-300"
@@ -374,13 +545,13 @@ function AppContent() {
               &lt;/&gt;
             </button>
 
-            <div className="h-4 w-px bg-[#2d2d2d]/80 hidden sm:block" />
+            <div className="h-4 w-px bg-[#2d2d2d]/80 shrink-0" />
 
-            {/* Cloud Connectors & Database status (Originally Split Layout button) */}
+            {/* Cloud Connectors & Database status */}
             <button 
               onClick={() => setIsConnectorsOpen(!isConnectorsOpen)}
               className={cn(
-                "p-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center relative",
+                "p-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center relative shrink-0",
                 isConnectorsOpen 
                   ? "text-[#4285f4] bg-[#4285f4]/15 border border-[#4285f4]/30" 
                   : "text-neutral-500 hover:text-neutral-300"
@@ -394,23 +565,75 @@ function AppContent() {
             {isConnectorsOpen && (
               <CloudConnectorsPopup onClose={() => setIsConnectorsOpen(false)} />
             )}
+
+            <div className="h-4 w-px bg-[#2d2d2d]/80 shrink-0" />
+
+            {/* AI Load Balancer Engine Pill Button */}
+            <button
+              onClick={() => setIsLoadBalancerOpen(!isLoadBalancerOpen)}
+              className={cn(
+                "px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shrink-0 text-xs font-bold border",
+                isLoadBalancerOpen
+                  ? "text-purple-300 bg-purple-500/20 border-purple-500/50 shadow-sm shadow-purple-500/20"
+                  : "text-neutral-300 hover:text-white bg-[#18181c] hover:bg-[#202025] border-[#2d2d2d]"
+              )}
+              title="Touch / click to view and control the real-time AI Model Load Balancer Engine"
+            >
+              <Zap className="w-3.5 h-3.5 text-purple-400 fill-purple-400/30" />
+              <span className="hidden sm:inline text-[11px] font-bold">AI Load Balancer</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            </button>
           </div>
         </div>
         
-        {/* Center: Address Bar resembling exact user screenshot */}
-        <div className="hidden md:flex items-center gap-3">
-          <Monitor className="w-4 h-4 text-neutral-500 hidden sm:block shrink-0" />
+        {/* Center: Address Bar with device mode toggle button */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <button 
+            type="button"
+            onClick={cycleDeviceMode}
+            className={cn(
+              "p-1.5 rounded-lg border transition-all cursor-pointer flex items-center justify-center shrink-0",
+              deviceMode === "desktop" 
+                ? "bg-[#18181c] text-neutral-400 hover:text-white border-[#2d2d2d]" 
+                : deviceMode === "tablet"
+                ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40 shadow-sm shadow-indigo-500/20"
+                : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm shadow-emerald-500/20"
+            )}
+            title={
+              deviceMode === "desktop"
+                ? "Current: Desktop Mode. Click/touch for Tab Preview Mode"
+                : deviceMode === "tablet"
+                ? "Current: Tab Preview Mode (768px). Click/touch for Mobile View"
+                : "Current: Mobile View (375px). Click/touch for Desktop Mode"
+            }
+          >
+            {deviceMode === "desktop" && <Monitor className="w-4 h-4" />}
+            {deviceMode === "tablet" && <Tablet className="w-4 h-4 text-indigo-400" />}
+            {deviceMode === "mobile" && <Smartphone className="w-4 h-4 text-emerald-400" />}
+          </button>
           
           <div className="flex items-center bg-[#09090b]/80 border border-[#2d2d2d]/60 rounded-full px-3 py-1 text-xs text-neutral-300 w-44 sm:w-60 md:w-80 lg:w-[320px] transition-all shrink-0">
             <button 
-              onClick={() => restartDevServer()}
-              className="text-neutral-500 hover:text-neutral-200 transition-colors shrink-0 cursor-pointer"
-              title="Restart development server"
+              onClick={() => {
+                setIsReloading(true);
+                runPreview();
+                setTimeout(() => setIsReloading(false), 600);
+              }}
+              className="text-neutral-500 hover:text-neutral-200 transition-colors shrink-0 cursor-pointer p-0.5 rounded-full hover:bg-neutral-800 active:scale-90"
+              title="Touch / click to reload website preview"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
+              <RefreshCw className={cn("w-3.5 h-3.5 transition-transform", isReloading && "animate-spin text-indigo-400")} />
             </button>
-            <div className="flex-1 text-center font-bold text-neutral-200 truncate select-none px-2 text-[11px]">
-              Homepage
+            <div className="flex-1 text-center font-bold text-neutral-200 truncate select-none px-2 text-[11px] flex items-center justify-center gap-1.5">
+              <span>Homepage</span>
+              {deviceMode !== "desktop" && (
+                <span className={cn(
+                  "text-[9px] px-1.5 py-0.2 rounded-full font-mono uppercase font-bold tracking-tight",
+                  deviceMode === "tablet" ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                )}>
+                  {deviceMode === "tablet" ? "Tab 768px" : "Mobile 375px"}
+                </span>
+              )}
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
           </div>
@@ -427,22 +650,76 @@ function AppContent() {
         </div>
         
         {/* Right Side: Action buttons matching screenshot */}
-        <div className="hidden md:flex items-center gap-2 shrink-0">
-          {/* Green User Initial Avatar (N for nanthablackbird) */}
-          <div 
-            className="h-7 w-7 rounded-full bg-emerald-700 hover:bg-emerald-600 text-white flex items-center justify-center font-bold text-xs select-none transition-all shadow-sm border border-emerald-500/20 cursor-pointer mr-1.5"
-            title="Logged in as nanthablackbird@gmail.com"
-          >
-            N
-          </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {/* User Sign-In or Avatar Profile Dropdown */}
+          {loadingUser ? (
+            <div className="h-7 w-7 flex items-center justify-center mr-1">
+              <Loader2 className="w-4 h-4 text-neutral-400 animate-spin" />
+            </div>
+          ) : user ? (
+            <div className="relative mr-1">
+              <button 
+                onClick={() => setIsProfileOpen(!isProfileOpen)}
+                className="h-7 w-7 rounded-full overflow-hidden border border-neutral-700 hover:border-indigo-500 transition-all cursor-pointer flex items-center justify-center bg-indigo-600 font-bold text-xs text-white"
+                title={`Logged in as ${user.email}`}
+              >
+                {user.photoURL ? (
+                  <img src={user.photoURL} alt={user.displayName || "User"} className="h-full w-full object-cover animate-fade-in" referrerPolicy="no-referrer" />
+                ) : (
+                  (user.displayName || user.email || "U").charAt(0).toUpperCase()
+                )}
+              </button>
+              
+              {isProfileOpen && (
+                <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-[#141416] border border-neutral-800 p-3 shadow-2xl z-[999] animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="flex items-center gap-2.5 pb-2.5 border-b border-neutral-900">
+                    <div className="h-9 w-9 rounded-full bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center overflow-hidden font-bold text-sm shrink-0">
+                      {user.photoURL ? (
+                        <img src={user.photoURL} alt={user.displayName || "User"} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        (user.displayName || user.email || "U").charAt(0).toUpperCase()
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-neutral-200 truncate leading-none mb-1">{user.displayName || "User"}</p>
+                      <p className="text-[10px] text-neutral-500 truncate leading-none">{user.email}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="pt-2">
+                    <button 
+                      onClick={() => {
+                        setIsProfileOpen(false);
+                        logout();
+                      }}
+                      className="w-full px-2.5 py-1.5 text-left text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/5 rounded-xl transition-all cursor-pointer"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button 
+              onClick={() => signIn().catch(err => console.error(err))}
+              className="px-3 py-1.5 bg-[#18181b] hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 text-neutral-200 rounded-full text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 mr-1"
+            >
+              <Cloud className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Sign In</span>
+            </button>
+          )}
 
           <button className="px-4 py-1.5 bg-[#1a1a1c] hover:bg-[#252528] text-neutral-200 border border-[#2d2d2d]/80 rounded-full text-[11px] font-bold transition-colors cursor-pointer shrink-0">
             Share
           </button>
           
-          {/* Upgrade Purple Pill with Lightning Bolt */}
-          <button className="px-4 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-full text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 shadow-md shadow-purple-500/20 shrink-0">
-            <Zap className="w-3.5 h-3.5 fill-white" />
+          {/* Upgrade Purple Pill */}
+          <button 
+            onClick={() => setView("home")}
+            className="px-4 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-full text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center shadow-md shadow-purple-500/20 active:scale-95 shrink-0"
+            title="Touch to view Pricing & Subscription Plans"
+          >
             <span>Upgrade</span>
           </button>
           
@@ -723,8 +1000,8 @@ function AppContent() {
               )}
             </div>
 
-            {/* Mobile Footer Navigation Bar */}
-            <div className="h-14 bg-[#121214] border-t border-[#222] px-4 flex items-center justify-around shrink-0 z-30 select-none">
+            {/* Mobile Footer Navigation Bar with curved container edges & Cloud icon */}
+            <div className="h-14 bg-[#141418] border border-[#2d2d38] m-2 rounded-2xl sm:rounded-3xl shadow-xl px-4 flex items-center justify-around shrink-0 z-30 select-none transition-all">
               <button 
                 onClick={() => setMobileTab("chat")}
                 className={cn(
@@ -757,7 +1034,7 @@ function AppContent() {
                   mobileTab === "settings" ? "text-purple-400 bg-purple-500/10 font-bold" : "text-neutral-500 hover:text-neutral-300"
                 )}
               >
-                <Settings className="w-4 h-4" />
+                <Cloud className="w-4 h-4" />
                 <span className="text-[9px] uppercase tracking-wider font-bold">Settings</span>
               </button>
             </div>
@@ -1045,6 +1322,12 @@ function AppContent() {
           </div>
         )}
       </main>
+
+      {/* Real-time AI Model Load Balancer Control Dashboard */}
+      <AILoadBalancerModal 
+        isOpen={isLoadBalancerOpen} 
+        onClose={() => setIsLoadBalancerOpen(false)} 
+      />
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {

@@ -48,9 +48,20 @@ interface ConnectorItem {
 
 const INITIAL_CONNECTORS: ConnectorItem[] = [
   {
+    id: "gemini",
+    name: "Gemini Pro (Google)",
+    description: "Unlock Google's native multimodal power, 2M+ token context windows, and ultra-fast code generation.",
+    category: "AI Models",
+    iconColor: "text-indigo-400 border-indigo-500/20 bg-indigo-500/5",
+    placeholder: "AIzaSy...",
+    status: "not_configured",
+    apiKey: "",
+    enabled: true
+  },
+  {
     id: "claude",
-    name: "Claude (Anthropic)",
-    description: "Industry-leading reasoning and language generation with Claude 3.5 Sonnet and Opus.",
+    name: "Claude 3.5 Sonnet (Anthropic)",
+    description: "Industry-leading reasoning and clean code generation with Claude 3.5 Sonnet and Opus.",
     category: "AI Models",
     iconColor: "text-orange-400 border-orange-500/20 bg-orange-500/5",
     placeholder: "sk-ant-...",
@@ -60,8 +71,8 @@ const INITIAL_CONNECTORS: ConnectorItem[] = [
   },
   {
     id: "chatgpt",
-    name: "ChatGPT (OpenAI)",
-    description: "Connect to GPT-4o and GPT-3.5 APIs for state-of-the-art vision and instruction following.",
+    name: "ChatGPT / GPT-4o (OpenAI)",
+    description: "Connect to GPT-4o for state-of-the-art vision, instruction following, and complex UI logic.",
     category: "AI Models",
     iconColor: "text-emerald-400 border-emerald-500/20 bg-emerald-500/5",
     placeholder: "sk-proj-...",
@@ -70,42 +81,9 @@ const INITIAL_CONNECTORS: ConnectorItem[] = [
     enabled: false
   },
   {
-    id: "mistral",
-    name: "Mistral AI",
-    description: "High-performance open weights models including Mixtral 8x22B and Mistral Large.",
-    category: "AI Models",
-    iconColor: "text-amber-400 border-amber-500/20 bg-amber-500/5",
-    placeholder: "m-ai-...",
-    status: "not_configured",
-    apiKey: "",
-    enabled: false
-  },
-  {
-    id: "gemini",
-    name: "Gemini Pro (Google)",
-    description: "Unlock Google's native multimodal power, 1M+ token context windows, and ultra-fast generation.",
-    category: "AI Models",
-    iconColor: "text-indigo-400 border-indigo-500/20 bg-indigo-500/5",
-    placeholder: "AIzaSy...",
-    status: "not_configured",
-    apiKey: "",
-    enabled: false
-  },
-  {
-    id: "qwen",
-    name: "Qwen (Alibaba)",
-    description: "Highly capable bilingual and multilingual AI models with powerful coding capabilities.",
-    category: "AI Models",
-    iconColor: "text-blue-400 border-blue-500/20 bg-blue-500/5",
-    placeholder: "qw-key-...",
-    status: "not_configured",
-    apiKey: "",
-    enabled: false
-  },
-  {
     id: "deepseek",
-    name: "DeepSeek",
-    description: "Ultra-cost-efficient, high-quality reasoning models with deep coding and math expertise.",
+    name: "DeepSeek Coder V2",
+    description: "Ultra-cost-efficient, high-quality reasoning model with specialized coding and math expertise.",
     category: "AI Models",
     iconColor: "text-cyan-400 border-cyan-500/20 bg-cyan-500/5",
     placeholder: "ds-...",
@@ -114,56 +92,34 @@ const INITIAL_CONNECTORS: ConnectorItem[] = [
     enabled: false
   },
   {
-    id: "resend",
-    name: "Resend",
-    description: "The next-generation email sending platform. Send transactional and marketing emails with ease.",
-    category: "Developer Tools",
+    id: "qwen",
+    name: "Qwen 2.5 Coder (Alibaba)",
+    description: "Highly capable bilingual and multilingual AI model with powerful coding capabilities.",
+    category: "AI Models",
+    iconColor: "text-blue-400 border-blue-500/20 bg-blue-500/5",
+    placeholder: "qw-key-...",
+    status: "not_configured",
+    apiKey: "",
+    enabled: false
+  },
+  {
+    id: "mistral",
+    name: "Mistral Codestral (Mistral AI)",
+    description: "High-performance open weights model specifically optimized for code generation.",
+    category: "AI Models",
+    iconColor: "text-amber-400 border-amber-500/20 bg-amber-500/5",
+    placeholder: "m-ai-...",
+    status: "not_configured",
+    apiKey: "",
+    enabled: false
+  },
+  {
+    id: "groq",
+    name: "Groq Llama 3.3 (Groq / Meta)",
+    description: "Ultra-fast Llama 3.3 70B inference engine providing instantaneous code completion.",
+    category: "AI Models",
     iconColor: "text-purple-400 border-purple-500/20 bg-purple-500/5",
-    placeholder: "re_...",
-    status: "not_configured",
-    apiKey: "",
-    enabled: false
-  },
-  {
-    id: "firecrawl",
-    name: "Firecrawl",
-    description: "Turn entire websites into clean, LLM-ready markdown or structured json formats.",
-    category: "Developer Tools",
-    iconColor: "text-pink-400 border-pink-500/20 bg-pink-500/5",
-    placeholder: "fc-...",
-    status: "not_configured",
-    apiKey: "",
-    enabled: false
-  },
-  {
-    id: "clerk",
-    name: "Clerk",
-    description: "Complete user management, robust multi-tenant authorization, and beautiful pre-built authentication components.",
-    category: "Authentication",
-    iconColor: "text-violet-400 border-violet-500/20 bg-violet-500/5",
-    placeholder: "pk_test_...",
-    status: "not_configured",
-    apiKey: "",
-    enabled: false
-  },
-  {
-    id: "tavily",
-    name: "Tavily AI",
-    description: "Search engine optimized specifically for LLMs and autonomous agents to fetch factual real-time web knowledge.",
-    category: "Search & Discovery",
-    iconColor: "text-teal-400 border-teal-500/20 bg-teal-500/5",
-    placeholder: "tvly-...",
-    status: "not_configured",
-    apiKey: "",
-    enabled: false
-  },
-  {
-    id: "algolia",
-    name: "Algolia Search",
-    description: "Lightning-fast, highly configurable, relevant search and discovery APIs for databases.",
-    category: "Search & Discovery",
-    iconColor: "text-sky-400 border-sky-500/20 bg-sky-500/5",
-    placeholder: "alg-...",
+    placeholder: "gsk_...",
     status: "not_configured",
     apiKey: "",
     enabled: false
@@ -178,11 +134,7 @@ const getDocsUrl = (id: string) => {
     case "mistral": return "https://console.mistral.ai/";
     case "deepseek": return "https://platform.deepseek.com/";
     case "qwen": return "https://dashscope.console.aliyun.com/";
-    case "resend": return "https://resend.com/";
-    case "firecrawl": return "https://firecrawl.dev/";
-    case "clerk": return "https://clerk.com/";
-    case "tavily": return "https://tavily.com/";
-    case "algolia": return "https://algolia.com/";
+    case "groq": return "https://console.groq.com/";
     default: return "https://google.com";
   }
 };
@@ -195,12 +147,8 @@ const getConnectorIcon = (id: string) => {
     case "mistral": return Zap;
     case "qwen": return Sliders;
     case "deepseek": return Terminal;
-    case "resend": return Mail;
-    case "firecrawl": return Flame;
-    case "clerk": return Lock;
-    case "tavily": return Search;
-    case "algolia": return Database;
-    default: return Cloud;
+    case "groq": return Cpu;
+    default: return Sparkles;
   }
 };
 
@@ -214,7 +162,9 @@ export default function CloudConnectorsPopup({ onClose }: CloudConnectorsPopupPr
     try {
       const saved = localStorage.getItem("ai-builder-connectors-v1");
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        const aiOnly = parsed.filter((c: any) => c.category === "AI Models");
+        if (aiOnly.length > 0) return aiOnly;
       }
     } catch (e) {
       console.error("Failed to load connectors config", e);
@@ -228,8 +178,8 @@ export default function CloudConnectorsPopup({ onClose }: CloudConnectorsPopupPr
 
   const [visibleKeys, setVisibleKeys] = useState<Record<string, boolean>>({});
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeCategory, setActiveCategory] = useState("All");
-  const [logs, setLogs] = useState<string[]>(["[SYSTEM] Cloud Connection Manager initialized in workspace."]);
+  const [activeCategory, setActiveCategory] = useState("All AI Models");
+  const [logs, setLogs] = useState<string[]>(["[SYSTEM] AI Model Connector Manager initialized in workspace."]);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [verifyStep, setVerifyStep] = useState(0);
 
@@ -266,7 +216,11 @@ export default function CloudConnectorsPopup({ onClose }: CloudConnectorsPopupPr
       try {
         const saved = localStorage.getItem("ai-builder-connectors-v1");
         if (saved) {
-          setConnectors(JSON.parse(saved));
+          const parsed = JSON.parse(saved);
+          const aiOnly = parsed.filter((c: any) => c.category === "AI Models");
+          if (aiOnly.length > 0) {
+            setConnectors(aiOnly);
+          }
         }
       } catch (e) {
         console.error("Error syncing connectors update", e);
@@ -368,12 +322,12 @@ export default function CloudConnectorsPopup({ onClose }: CloudConnectorsPopupPr
     saveConnectors(updated);
   };
 
-  const categories = ["All", "AI Models", "Developer Tools", "Authentication", "Search & Discovery"];
+  const categories = ["All AI Models"];
 
   const filteredConnectors = connectors.filter(c => {
     const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           c.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCat = activeCategory === "All" || c.category === activeCategory;
+    const matchesCat = activeCategory === "All AI Models" || activeCategory === "All" || c.category === activeCategory;
     return matchesSearch && matchesCat;
   });
 

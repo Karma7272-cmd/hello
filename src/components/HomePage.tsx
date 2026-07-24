@@ -56,9 +56,20 @@ export interface ConnectorItem {
 
 const INITIAL_CONNECTORS: ConnectorItem[] = [
   {
+    id: "gemini",
+    name: "Gemini Pro (Google)",
+    description: "Unlock Google's native multimodal power, 2M+ token context windows, and ultra-fast code generation.",
+    category: "AI Models",
+    iconColor: "text-indigo-400 border-indigo-500/20 bg-indigo-500/5",
+    placeholder: "AIzaSy...",
+    status: "not_configured",
+    apiKey: "",
+    enabled: true
+  },
+  {
     id: "claude",
-    name: "Claude (Anthropic)",
-    description: "Industry-leading reasoning and language generation with Claude 3.5 Sonnet and Opus.",
+    name: "Claude 3.5 Sonnet (Anthropic)",
+    description: "Industry-leading reasoning and clean code generation with Claude 3.5 Sonnet and Opus.",
     category: "AI Models",
     iconColor: "text-orange-400 border-orange-500/20 bg-orange-500/5",
     placeholder: "sk-ant-...",
@@ -68,8 +79,8 @@ const INITIAL_CONNECTORS: ConnectorItem[] = [
   },
   {
     id: "chatgpt",
-    name: "ChatGPT (OpenAI)",
-    description: "Connect to GPT-4o and GPT-3.5 APIs for state-of-the-art vision and instruction following.",
+    name: "ChatGPT / GPT-4o (OpenAI)",
+    description: "Connect to GPT-4o for state-of-the-art vision, instruction following, and complex UI logic.",
     category: "AI Models",
     iconColor: "text-emerald-400 border-emerald-500/20 bg-emerald-500/5",
     placeholder: "sk-proj-...",
@@ -78,42 +89,9 @@ const INITIAL_CONNECTORS: ConnectorItem[] = [
     enabled: false
   },
   {
-    id: "mistral",
-    name: "Mistral AI",
-    description: "High-performance open weights models including Mixtral 8x22B and Mistral Large.",
-    category: "AI Models",
-    iconColor: "text-amber-400 border-amber-500/20 bg-amber-500/5",
-    placeholder: "m-ai-...",
-    status: "not_configured",
-    apiKey: "",
-    enabled: false
-  },
-  {
-    id: "gemini",
-    name: "Gemini Pro (Google)",
-    description: "Unlock Google's native multimodal power, 1M+ token context windows, and ultra-fast generation.",
-    category: "AI Models",
-    iconColor: "text-indigo-400 border-indigo-500/20 bg-indigo-500/5",
-    placeholder: "AIzaSy...",
-    status: "not_configured",
-    apiKey: "",
-    enabled: false
-  },
-  {
-    id: "qwen",
-    name: "Qwen (Alibaba)",
-    description: "Highly capable bilingual and multilingual AI models with powerful coding capabilities.",
-    category: "AI Models",
-    iconColor: "text-blue-400 border-blue-500/20 bg-blue-500/5",
-    placeholder: "qw-key-...",
-    status: "not_configured",
-    apiKey: "",
-    enabled: false
-  },
-  {
     id: "deepseek",
-    name: "DeepSeek",
-    description: "Ultra-cost-efficient, high-quality reasoning models with deep coding and math expertise.",
+    name: "DeepSeek Coder V2",
+    description: "Ultra-cost-efficient, high-quality reasoning model with specialized coding and math expertise.",
     category: "AI Models",
     iconColor: "text-cyan-400 border-cyan-500/20 bg-cyan-500/5",
     placeholder: "ds-...",
@@ -122,56 +100,34 @@ const INITIAL_CONNECTORS: ConnectorItem[] = [
     enabled: false
   },
   {
-    id: "resend",
-    name: "Resend",
-    description: "The next-generation email sending platform. Send transactional and marketing emails with ease.",
-    category: "Developer Tools",
+    id: "qwen",
+    name: "Qwen 2.5 Coder (Alibaba)",
+    description: "Highly capable bilingual and multilingual AI model with powerful coding capabilities.",
+    category: "AI Models",
+    iconColor: "text-blue-400 border-blue-500/20 bg-blue-500/5",
+    placeholder: "qw-key-...",
+    status: "not_configured",
+    apiKey: "",
+    enabled: false
+  },
+  {
+    id: "mistral",
+    name: "Mistral Codestral (Mistral AI)",
+    description: "High-performance open weights model specifically optimized for code generation.",
+    category: "AI Models",
+    iconColor: "text-amber-400 border-amber-500/20 bg-amber-500/5",
+    placeholder: "m-ai-...",
+    status: "not_configured",
+    apiKey: "",
+    enabled: false
+  },
+  {
+    id: "groq",
+    name: "Groq Llama 3.3 (Groq / Meta)",
+    description: "Ultra-fast Llama 3.3 70B inference engine providing instantaneous code completion.",
+    category: "AI Models",
     iconColor: "text-purple-400 border-purple-500/20 bg-purple-500/5",
-    placeholder: "re_...",
-    status: "not_configured",
-    apiKey: "",
-    enabled: false
-  },
-  {
-    id: "firecrawl",
-    name: "Firecrawl",
-    description: "Turn entire websites into clean, LLM-ready markdown or structured json formats.",
-    category: "Developer Tools",
-    iconColor: "text-pink-400 border-pink-500/20 bg-pink-500/5",
-    placeholder: "fc-...",
-    status: "not_configured",
-    apiKey: "",
-    enabled: false
-  },
-  {
-    id: "clerk",
-    name: "Clerk",
-    description: "Complete user management, robust multi-tenant authorization, and beautiful pre-built authentication components.",
-    category: "Authentication",
-    iconColor: "text-violet-400 border-violet-500/20 bg-violet-500/5",
-    placeholder: "pk_test_...",
-    status: "not_configured",
-    apiKey: "",
-    enabled: false
-  },
-  {
-    id: "tavily",
-    name: "Tavily AI",
-    description: "Search engine optimized specifically for LLMs and autonomous agents to fetch factual real-time web knowledge.",
-    category: "Search & Discovery",
-    iconColor: "text-teal-400 border-teal-500/20 bg-teal-500/5",
-    placeholder: "tvly-...",
-    status: "not_configured",
-    apiKey: "",
-    enabled: false
-  },
-  {
-    id: "algolia",
-    name: "Algolia Search",
-    description: "Lightning-fast, highly configurable, relevant search and discovery APIs for databases.",
-    category: "Search & Discovery",
-    iconColor: "text-sky-400 border-sky-500/20 bg-sky-500/5",
-    placeholder: "alg-...",
+    placeholder: "gsk_...",
     status: "not_configured",
     apiKey: "",
     enabled: false
@@ -185,7 +141,7 @@ interface HomePageProps {
 }
 
 export default function HomePage({ onSubmit, isGenerating, onLoadProject }: HomePageProps) {
-  const { projectHistory, loadProjectFromHistory, deleteProjectFromHistory } = useWorkspace();
+  const { projectHistory, loadProjectFromHistory, deleteProjectFromHistory, user } = useWorkspace();
   const [localPrompt, setLocalPrompt] = useState("");
   const [activeTab, setActiveTab] = useState<"build" | "about" | "pricing" | "tools" | "connectors">("build");
   
@@ -193,7 +149,9 @@ export default function HomePage({ onSubmit, isGenerating, onLoadProject }: Home
     try {
       const saved = localStorage.getItem("ai-builder-connectors-v1");
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        const aiOnly = parsed.filter((c: any) => c.category === "AI Models");
+        if (aiOnly.length > 0) return aiOnly;
       }
     } catch (e) {
       console.error("Failed to load connectors config", e);
@@ -203,7 +161,7 @@ export default function HomePage({ onSubmit, isGenerating, onLoadProject }: Home
 
   const [visibleKeys, setVisibleKeys] = useState<Record<string, boolean>>({});
   const [connectorsSearch, setConnectorsSearch] = useState("");
-  const [connectorsCategory, setConnectorsCategory] = useState<string>("All");
+  const [connectorsCategory, setConnectorsCategory] = useState<string>("All AI Models");
 
   const saveConnectors = (updated: ConnectorItem[]) => {
     setConnectors(updated);
@@ -222,7 +180,11 @@ export default function HomePage({ onSubmit, isGenerating, onLoadProject }: Home
       try {
         const saved = localStorage.getItem("ai-builder-connectors-v1");
         if (saved) {
-          setConnectors(JSON.parse(saved));
+          const parsed = JSON.parse(saved);
+          const aiOnly = parsed.filter((c: any) => c.category === "AI Models");
+          if (aiOnly.length > 0) {
+            setConnectors(aiOnly);
+          }
         }
       } catch (e) {
         console.error("Error syncing connectors update", e);
@@ -277,15 +239,20 @@ export default function HomePage({ onSubmit, isGenerating, onLoadProject }: Home
     }
   };
 
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!localPrompt.trim() || isGenerating) return;
+    if (!localPrompt.trim()) return;
     onSubmit(localPrompt.trim());
   };
 
   const handleSuggestionClick = (text: string) => {
     setLocalPrompt(text);
     setActiveTab("build");
+    setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 50);
   };
 
   const projectFilters = [
@@ -342,32 +309,17 @@ export default function HomePage({ onSubmit, isGenerating, onLoadProject }: Home
         ];
       case "my-projects":
       default:
-        return [
-          {
-            title: "Task Organizer",
-            desc: "Kanban board drag-and-drop",
-            icon: <LayoutGrid className="w-4 h-4 text-indigo-400" />,
-            prompt: "Create a fully interactive Kanban Board with column-dragging, drag-and-drop tasks, color-coded priority labels, and a search filter."
-          },
-          {
-            title: "Crypto Dashboard",
-            desc: "Realtime tracking portfolio",
-            icon: <Activity className="w-4 h-4 text-cyan-400" />,
-            prompt: "Build a beautiful cryptocurrency portfolio dashboard with responsive Recharts graphs, transaction history, and custom price alerts."
-          },
-          {
-            title: "Audio Player",
-            desc: "Pixel-perfect music streams",
-            icon: <Volume2 className="w-4 h-4 text-pink-400" />,
-            prompt: "Design a sleek music player interface with audio track listings, responsive volume bars, interactive favorites, and animated play loops."
-          },
-          {
-            title: "Fitness Log",
-            desc: "Workout metrics trackers",
-            icon: <Heart className="w-4 h-4 text-emerald-400" />,
-            prompt: "Build a fitness activity tracker with workout logs, daily water/calorie progress counters, and beautiful visual streak meters."
-          }
-        ];
+        if (projectHistory && projectHistory.length > 0) {
+          return projectHistory.map((item) => ({
+            id: item.id,
+            title: item.prompt,
+            desc: `Built ${new Date(item.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
+            icon: <Code2 className="w-4 h-4 text-indigo-400" />,
+            prompt: item.prompt,
+            historyItem: item
+          }));
+        }
+        return [];
     }
   };
 
@@ -591,22 +543,25 @@ export default function HomePage({ onSubmit, isGenerating, onLoadProject }: Home
             <button
               onClick={() => navigateToTab("pricing")}
               className={cn(
-                "w-full flex items-center rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer text-left",
+                "w-full flex items-center rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer text-left group",
                 isSidebarOpen ? "px-3 py-2 justify-between" : "p-2 justify-center",
                 activeTab === "pricing" 
-                  ? "bg-[#18181c] text-white border border-[#26262b] shadow-inner" 
-                  : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/40"
+                  ? "bg-gradient-to-r from-purple-900/60 to-indigo-900/60 text-white border border-purple-500/50 shadow-lg shadow-purple-500/20" 
+                  : "bg-gradient-to-r from-purple-600/15 via-indigo-600/10 to-transparent text-purple-300 hover:text-white hover:from-purple-600/25 hover:to-indigo-600/25 border border-purple-500/30"
               )}
-              title="Pricing Plans"
+              title="Touch to open Pricing page"
             >
               <div className="flex items-center gap-2.5">
-                <CreditCard className={cn("w-4 h-4", activeTab === "pricing" ? "text-indigo-400" : "text-neutral-500")} />
-                {isSidebarOpen && <span>Pricing</span>}
+                <Zap className="w-4 h-4 text-purple-400 fill-purple-400/20 group-hover:scale-110 transition-transform" />
+                {isSidebarOpen && <span>Upgrade / Pricing</span>}
               </div>
+              {isSidebarOpen && (
+                <span className="text-[9px] font-black tracking-wider uppercase bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-2 py-0.5 rounded-full shadow-sm">
+                  PRO
+                </span>
+              )}
             </button>
           </div>
-
-
 
           {/* Project History Section */}
           {isSidebarOpen && projectHistory && projectHistory.length > 0 && (
@@ -634,18 +589,16 @@ export default function HomePage({ onSubmit, isGenerating, onLoadProject }: Home
                       <Sparkles className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
                       <span className="truncate font-medium">{item.prompt}</span>
                     </button>
-                    {item.id !== "default-veo-gallery" && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteProjectFromHistory(item.id);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-neutral-500 hover:text-red-400 rounded transition-opacity cursor-pointer shrink-0"
-                        title="Delete from history"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteProjectFromHistory(item.id);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-neutral-500 hover:text-red-400 rounded transition-opacity cursor-pointer shrink-0"
+                      title="Delete from history"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -654,8 +607,37 @@ export default function HomePage({ onSubmit, isGenerating, onLoadProject }: Home
         </div>
 
         {/* Promo panels & bottom user card block */}
-        <div className="space-y-4">
-          
+        <div className="space-y-3">
+          {/* Upgrade Banner Card in Sidebar */}
+          {isSidebarOpen ? (
+            <div className="bg-gradient-to-br from-indigo-950/80 via-purple-950/60 to-neutral-900/90 border border-indigo-500/30 rounded-2xl p-3 shadow-xl relative overflow-hidden group">
+              <div className="absolute -right-4 -top-4 w-16 h-16 bg-purple-500/20 rounded-full blur-xl group-hover:bg-purple-500/30 transition-all pointer-events-none" />
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center shrink-0 shadow-md">
+                  <Sparkles className="w-3.5 h-3.5 text-white" />
+                </div>
+                <span className="text-xs font-bold text-white tracking-tight">Upgrade Plan</span>
+              </div>
+              <p className="text-[11px] text-neutral-300 mb-2.5 leading-snug">
+                Unlock unlimited AI builds, custom models & priority compute.
+              </p>
+              <button
+                onClick={() => navigateToTab("pricing")}
+                className="w-full py-1.5 px-3 bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-purple-600/25 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Zap className="w-3.5 h-3.5 fill-white text-white" />
+                <span>Touch for Pricing</span>
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => navigateToTab("pricing")}
+              className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-purple-500/25 cursor-pointer mx-auto hover:scale-105 active:scale-95 transition-all"
+              title="Upgrade Plan - Open Pricing Page"
+            >
+              <Zap className="w-4 h-4 fill-white" />
+            </button>
+          )}
 
 
           {/* Profile block at bottom */}
@@ -663,13 +645,31 @@ export default function HomePage({ onSubmit, isGenerating, onLoadProject }: Home
             {isSidebarOpen ? (
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-[#3b82f6] to-[#fd4290] flex items-center justify-center font-bold text-xs text-white shadow-md shrink-0">
-                    N
-                  </div>
-                  <div className="text-left leading-none min-w-0">
-                    <p className="text-xs font-bold text-neutral-200 truncate">Nantha</p>
-                    <span className="text-[9px] text-neutral-500 truncate block">nantha@lovable.dev</span>
-                  </div>
+                  {user ? (
+                    <>
+                      <div className="w-7 h-7 rounded-full overflow-hidden bg-gradient-to-tr from-[#3b82f6] to-[#fd4290] flex items-center justify-center font-bold text-xs text-white shadow-md shrink-0 border border-neutral-800">
+                        {user.photoURL ? (
+                          <img src={user.photoURL} alt={user.displayName || "User"} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          (user.displayName || user.email || "U").charAt(0).toUpperCase()
+                        )}
+                      </div>
+                      <div className="text-left leading-none min-w-0">
+                        <p className="text-xs font-bold text-neutral-200 truncate">{user.displayName || "User"}</p>
+                        <span className="text-[9px] text-neutral-500 truncate block">{user.email}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-7 h-7 rounded-full bg-neutral-800 flex items-center justify-center font-bold text-xs text-neutral-400 shrink-0">
+                        G
+                      </div>
+                      <div className="text-left leading-none min-w-0">
+                        <p className="text-xs font-bold text-neutral-400 truncate">Guest Developer</p>
+                        <span className="text-[9px] text-neutral-600 truncate block">Not authenticated</span>
+                      </div>
+                    </>
+                  )}
                 </div>
                 {/* Inbox button with red notifier */}
                 <div 
@@ -762,6 +762,7 @@ export default function HomePage({ onSubmit, isGenerating, onLoadProject }: Home
                   className="w-full max-w-2xl bg-[#141416]/95 border border-neutral-800/90 rounded-2xl p-4 shadow-2xl flex flex-col focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/20 focus-within:shadow-[0_0_40px_rgba(99,102,241,0.15)] transition-all duration-300 backdrop-blur-xl relative"
                 >
                   <textarea 
+                    ref={textareaRef}
                     rows={3}
                     placeholder="Ask Lovable to create..."
                     className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-sm text-neutral-100 placeholder-neutral-500 py-1 resize-none h-16 custom-scrollbar leading-relaxed"
@@ -970,19 +971,25 @@ export default function HomePage({ onSubmit, isGenerating, onLoadProject }: Home
 
                     {/* Right side build buttons */}
                     <div className="flex items-center gap-1.5">
-                      {/* Action Build Capsule dropdown */}
+                      {/* Action Build Capsule button */}
                       <button 
                         type="submit"
-                        disabled={isGenerating || !localPrompt.trim()}
+                        disabled={!localPrompt.trim()}
                         className={cn(
                           "h-8 px-4 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 shadow-lg cursor-pointer",
                           localPrompt.trim() 
-                            ? "bg-[#1f2025] hover:bg-[#282a32] text-white border border-neutral-800" 
+                            ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/20" 
                             : "bg-[#141416]/60 text-neutral-500 border border-neutral-800/40 cursor-not-allowed"
                         )}
                       >
-                        <span>Build</span>
-                        <ChevronDown className="w-3 h-3 text-neutral-400" />
+                        {isGenerating ? (
+                          <>
+                            <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0" />
+                            <span>Building...</span>
+                          </>
+                        ) : (
+                          <span>Build</span>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -1033,32 +1040,51 @@ export default function HomePage({ onSubmit, isGenerating, onLoadProject }: Home
 
                 {/* Interactive Dynamic Previews Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                  {getFilteredProjects().map((p, idx) => (
-                    <div 
-                      key={idx}
-                      onClick={() => handleSuggestionClick(p.prompt)}
-                      className="group relative bg-[#17171a]/50 border border-neutral-800/80 hover:border-indigo-500/30 rounded-xl overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:bg-[#1a1a20]"
-                    >
-                      {/* Grid vector pattern background placeholder */}
-                      <div className="h-24 bg-gradient-to-b from-[#111] to-[#18181c] relative flex items-center justify-center p-3 border-b border-neutral-900 overflow-hidden">
-                        <div className="absolute inset-0 bg-grid-pattern opacity-10 group-hover:opacity-20 transition-opacity" />
-                        <div className="absolute -inset-1 bg-gradient-to-tr from-indigo-500/5 via-transparent to-pink-500/5 opacity-50 group-hover:scale-110 transition-transform duration-500" />
-                        <div className="z-10 w-8 h-8 rounded-lg bg-neutral-900 border border-[#232328] flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-md">
-                          {p.icon}
+                  {getFilteredProjects().length === 0 ? (
+                    <div className="col-span-full py-8 text-center bg-[#17171a]/30 border border-dashed border-neutral-800 rounded-xl space-y-2">
+                      <Folder className="w-8 h-8 text-neutral-600 mx-auto" />
+                      <p className="text-xs font-bold text-neutral-400">No built projects yet</p>
+                      <p className="text-[11px] text-neutral-500">Enter a prompt above to build your first project!</p>
+                    </div>
+                  ) : (
+                    getFilteredProjects().map((p: any, idx: number) => (
+                      <div 
+                        key={p.id || idx}
+                        onClick={() => {
+                          if (p.historyItem) {
+                            loadProjectFromHistory(p.historyItem);
+                            if (onLoadProject) {
+                              onLoadProject();
+                            } else {
+                              setActiveTab("build");
+                            }
+                          } else {
+                            handleSuggestionClick(p.prompt);
+                          }
+                        }}
+                        className="group relative bg-[#17171a]/50 border border-neutral-800/80 hover:border-indigo-500/30 rounded-xl overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:bg-[#1a1a20]"
+                      >
+                        {/* Grid vector pattern background placeholder */}
+                        <div className="h-24 bg-gradient-to-b from-[#111] to-[#18181c] relative flex items-center justify-center p-3 border-b border-neutral-900 overflow-hidden">
+                          <div className="absolute inset-0 bg-grid-pattern opacity-10 group-hover:opacity-20 transition-opacity" />
+                          <div className="absolute -inset-1 bg-gradient-to-tr from-indigo-500/5 via-transparent to-pink-500/5 opacity-50 group-hover:scale-110 transition-transform duration-500" />
+                          <div className="z-10 w-8 h-8 rounded-lg bg-neutral-900 border border-[#232328] flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-md">
+                            {p.icon}
+                          </div>
+                        </div>
+                        
+                        {/* Info and subtitles */}
+                        <div className="p-3 text-left">
+                          <h4 className="text-xs font-bold text-neutral-200 group-hover:text-white transition-colors truncate">
+                            {p.title}
+                          </h4>
+                          <p className="text-[10px] text-neutral-500 mt-0.5 line-clamp-1 group-hover:text-neutral-400 transition-colors">
+                            {p.desc}
+                          </p>
                         </div>
                       </div>
-                      
-                      {/* Info and subtitles */}
-                      <div className="p-3 text-left">
-                        <h4 className="text-xs font-bold text-neutral-200 group-hover:text-white transition-colors truncate">
-                          {p.title}
-                        </h4>
-                        <p className="text-[10px] text-neutral-500 mt-0.5 line-clamp-1 group-hover:text-neutral-400 transition-colors">
-                          {p.desc}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
 
@@ -1202,19 +1228,19 @@ export default function HomePage({ onSubmit, isGenerating, onLoadProject }: Home
                 <div className="space-y-1 text-left">
                   <div className="inline-flex items-center gap-2 px-2.5 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-emerald-400 text-[10px] font-bold uppercase tracking-wider font-mono">
                     <Sliders className="w-3 h-3" />
-                    <span>Cloud Connectors &amp; APIs</span>
+                    <span>AI Model Connectors</span>
                   </div>
                   <h2 className="text-xl md:text-2xl font-black text-white tracking-tight">
-                    API Integrations Sandbox
+                    Connect AI Model to Generate Code
                   </h2>
                   <p className="text-neutral-400 text-xs">
-                    Configure your secret API tokens for native sandbox code deployment. Keys are stored locally and never exposed.
+                    Configure your secret API keys for AI models to generate code, refactor UI components, and drive compilation loops.
                   </p>
                 </div>
                 
                 <div className="flex items-center gap-2.5">
                   <div className="text-right hidden sm:block">
-                    <div className="text-xs text-neutral-400 font-medium">Enabled Integrations</div>
+                    <div className="text-xs text-neutral-400 font-medium">Active AI Models</div>
                     <div className="text-[10px] text-neutral-500 font-mono">
                       {connectors.filter(c => c.enabled).length} of {connectors.length} active
                     </div>
@@ -1226,7 +1252,7 @@ export default function HomePage({ onSubmit, isGenerating, onLoadProject }: Home
               {/* Filter controls */}
               <div className="flex flex-col sm:flex-row gap-3 justify-between items-stretch sm:items-center bg-[#111113] p-3 rounded-2xl border border-neutral-900">
                 <div className="flex flex-wrap gap-1">
-                  {["All", "AI Models", "Developer Tools", "Authentication", "Search & Discovery"].map((cat) => (
+                  {["All AI Models"].map((cat) => (
                     <button
                       key={cat}
                       onClick={() => setConnectorsCategory(cat)}
@@ -1246,7 +1272,7 @@ export default function HomePage({ onSubmit, isGenerating, onLoadProject }: Home
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-500" />
                   <input
                     type="text"
-                    placeholder="Search integrations..."
+                    placeholder="Search AI model connectors..."
                     value={connectorsSearch}
                     onChange={(e) => setConnectorsSearch(e.target.value)}
                     className="w-full bg-neutral-950 border border-neutral-800 rounded-xl py-1.5 pl-9 pr-3 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-indigo-500 transition-colors"
@@ -1267,7 +1293,7 @@ export default function HomePage({ onSubmit, isGenerating, onLoadProject }: Home
                 {connectors.filter(c => {
                   const matchesSearch = c.name.toLowerCase().includes(connectorsSearch.toLowerCase()) || 
                                         c.description.toLowerCase().includes(connectorsSearch.toLowerCase());
-                  const matchesCat = connectorsCategory === "All" || c.category === connectorsCategory;
+                  const matchesCat = connectorsCategory === "All AI Models" || connectorsCategory === "All" || c.category === connectorsCategory;
                   return matchesSearch && matchesCat;
                 }).map((connector) => {
                   const isVisible = visibleKeys[connector.id] || false;
@@ -1422,10 +1448,10 @@ export default function HomePage({ onSubmit, isGenerating, onLoadProject }: Home
                 }).length === 0 && (
                   <div className="col-span-full py-12 text-center space-y-3 bg-[#111113]/40 border border-dashed border-neutral-900 rounded-2xl">
                     <Inbox className="w-8 h-8 text-neutral-600 mx-auto" />
-                    <div className="text-xs font-bold text-neutral-400">No connectors match filter</div>
-                    <p className="text-[11px] text-neutral-500 max-w-md mx-auto">Try typing a different model keyword or clear the search criteria to explore all API nodes.</p>
+                    <div className="text-xs font-bold text-neutral-400">No AI model connectors match filter</div>
+                    <p className="text-[11px] text-neutral-500 max-w-md mx-auto">Try typing a different model name or clear search criteria.</p>
                     <button 
-                      onClick={() => { setConnectorsSearch(""); setConnectorsCategory("All"); }}
+                      onClick={() => { setConnectorsSearch(""); setConnectorsCategory("All AI Models"); }}
                       className="px-3 py-1 bg-neutral-800 text-white rounded-lg text-xs font-semibold hover:bg-neutral-700"
                     >
                       Reset filters
@@ -1437,19 +1463,19 @@ export default function HomePage({ onSubmit, isGenerating, onLoadProject }: Home
               {/* Developer integration guidelines banner */}
               <div className="bg-[#111113] border border-neutral-800/80 p-5 rounded-2xl text-left space-y-3">
                 <div className="flex items-center gap-2.5">
-                  <Terminal className="w-4 h-4 text-emerald-400" />
-                  <span className="text-xs font-bold text-white font-mono">Integrations SDK Sandbox Access</span>
+                  <Terminal className="w-4 h-4 text-indigo-400" />
+                  <span className="text-xs font-bold text-white font-mono">AI Model Code Generation Driver</span>
                 </div>
                 <p className="text-neutral-400 text-xs leading-relaxed">
-                  Every enabled connector is automatically bound and proxy-exposed to your AI Studio backend container. 
-                  Use client-side helper libraries or direct `/api/connectors` gateways using pre-configured variables.
+                  Every configured AI model key is securely stored in your local session cache and bound to your workspace code compiler. 
+                  When you prompt the generator, your selected model key is passed via proxy headers to execute real-time code synthesis.
                 </p>
                 <div className="bg-neutral-950 rounded-xl p-3 font-mono text-[10px] text-neutral-300 border border-neutral-900/60 leading-relaxed overflow-x-auto">
-                  <span className="text-neutral-500">// Example: Fetching content from Tavily AI connector on your backend</span><br />
-                  <span className="text-indigo-400">const</span> response = <span className="text-indigo-400">await</span> fetch(<span className="text-emerald-400">"https://api.tavily.com/search"</span>, &#123;<br />
+                  <span className="text-neutral-500">// Example: Code generation payload with connected AI Model</span><br />
+                  <span className="text-indigo-400">const</span> codeGenResponse = <span className="text-indigo-400">await</span> fetch(<span className="text-emerald-400">"/api/generate-code"</span>, &#123;<br />
                   &nbsp;&nbsp;method: <span className="text-emerald-400">"POST"</span>,<br />
                   &nbsp;&nbsp;headers: &#123; <span className="text-emerald-400">"Content-Type"</span>: <span className="text-emerald-400">"application/json"</span> &#125;,<br />
-                  &nbsp;&nbsp;body: JSON.stringify(&#123; api_key: process.env.TAVILY_API_KEY, query: <span className="text-emerald-400">"Latest AI Studio news"</span> &#125;)<br />
+                  &nbsp;&nbsp;body: JSON.stringify(&#123; model: <span className="text-emerald-400">"gemini-2.0-flash"</span>, apiKey: userProvidedApiKey, prompt: <span className="text-emerald-400">"Generate React App"</span> &#125;)<br />
                   &#125;);
                 </div>
               </div>

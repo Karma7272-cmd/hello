@@ -1,11 +1,21 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import { aiLoadBalancer } from "./aiLoadBalancer";
 
-export function getAI(): GoogleGenAI {
+export function getAI(overrideApiKey?: string): GoogleGenAI {
+  if (overrideApiKey && overrideApiKey.trim()) {
+    return new GoogleGenAI({ apiKey: overrideApiKey.trim() });
+  }
+
+  // Check key pool from AI Load Balancer first
+  const poolKey = aiLoadBalancer.getNextApiKey();
+  if (poolKey && poolKey.trim()) {
+    return new GoogleGenAI({ apiKey: poolKey.trim() });
+  }
+
   try {
     const savedConnectors = localStorage.getItem("ai-builder-connectors-v1");
     if (savedConnectors) {
       const parsed = JSON.parse(savedConnectors);
-      // Always look for the 'gemini' connector key specifically for any underlying Gemini operations
       const geminiConnector = parsed.find((c: any) => c.id === "gemini");
       if (geminiConnector && geminiConnector.enabled && geminiConnector.apiKey && geminiConnector.apiKey.trim()) {
         return new GoogleGenAI({ 
@@ -40,27 +50,83 @@ export async function runLlmRequest(
     }
   }
 
-  // Only use the custom API key if the connector is explicitly enabled in the settings
   const customKey = (selectedConnector && selectedConnector.enabled) ? selectedConnector.apiKey?.trim() : undefined;
 
-  // 1. Gemini or Fallback to default Gemini Key
+  // 1. Gemini AI with Load Balancer Node Pool & Auto-Failover
   if (selectedModelId === "gemini" || !customKey) {
-    const ai = getAI();
-    const config: any = {};
-    if (isJson) {
-      config.responseMimeType = "application/json";
-      if (responseSchema) {
-        config.responseSchema = responseSchema;
+    const primaryNode = aiLoadBalancer.selectNode();
+    const availableNodes = aiLoadBalancer.getNodes().filter(n => n.status !== "offline");
+    
+    // Ordered nodes: selected primary first, then remaining healthy nodes for failover
+    const attemptOrder = [
+      primaryNode,
+      ...availableNodes.filter(n => n.id !== primaryNode.id)
+    ];
+
+    let lastError: any = null;
+    let failoverFrom: string | undefined = undefined;
+
+    for (let attempt = 0; attempt < attemptOrder.length; attempt++) {
+      const currentNode = attemptOrder[attempt];
+      const startTime = Date.now();
+
+      try {
+        const apiKeyToUse = aiLoadBalancer.getNextApiKey();
+        const ai = getAI(apiKeyToUse);
+        
+        const config: any = {};
+        if (isJson) {
+          config.responseMimeType = "application/json";
+          if (responseSchema) {
+            config.responseSchema = responseSchema;
+          }
+        }
+
+        const response = await ai.models.generateContent({
+          model: currentNode.modelId,
+          contents: prompt,
+          config
+        });
+
+        const latency = Date.now() - startTime;
+        const text = response.text || "";
+
+        if (!text) {
+          throw new Error("Empty response returned from AI node " + currentNode.name);
+        }
+
+        // Record successful load balanced execution
+        aiLoadBalancer.recordResult(
+          currentNode.id,
+          latency,
+          true,
+          prompt,
+          undefined,
+          failoverFrom
+        );
+
+        return text;
+      } catch (err: any) {
+        const latency = Date.now() - startTime;
+        const errorMsg = err?.message || String(err);
+        
+        // Record failed execution
+        aiLoadBalancer.recordResult(
+          currentNode.id,
+          latency,
+          false,
+          prompt,
+          errorMsg,
+          failoverFrom
+        );
+
+        lastError = err;
+        failoverFrom = currentNode.name;
+        console.warn(`[AI Load Balancer] Failover triggered: Node ${currentNode.name} failed (${errorMsg}). Trying next node in pool...`);
       }
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
-      config
-    });
-
-    return response.text || "";
+    throw new Error(`All AI Load Balancer nodes exhausted. Last error: ${lastError?.message || "Unknown model failure"}`);
   }
 
   // Helper system instruction extension to enforce JSON structure in non-native schema providers
@@ -190,7 +256,7 @@ export async function runLlmRequest(
   // Standard Fallback to default Gemini
   const ai = getAI();
   const response = await ai.models.generateContent({
-    model: "gemini-3.5-flash",
+    model: "gemini-3.6-flash",
     contents: prompt
   });
   return response.text || "";
@@ -205,13 +271,14 @@ export async function generateWebsite(prompt: string): Promise<FileStructure> {
     const textResponse = await runLlmRequest(
       `Generate a complete multi-page React website based on this prompt: "${prompt}".
       
-      TECHNICAL REQUIREMENTS:
+      TECHNICAL & SYNTAX REQUIREMENTS:
       1. Use React with TypeScript (tsx/ts files).
       2. Use Tailwind CSS for all styling (assume it's configured).
       3. Use 'react-router-dom' for multi-page navigation (prefer 'MemoryRouter' for the preview environment).
       4. Use 'lucide-react' for icons.
-      5. The main entry point MUST be "/src/App.tsx" (or "/App.tsx" which we will map).
-      6. All imports should be relative (e.g., "./components/Header").
+      5. The main entry point MUST be "/src/App.tsx".
+      6. All imports MUST be valid relative paths (e.g., "./components/Header").
+      7. CRITICAL SYNTAX INTEGRITY: Write 100% clean, valid, executable TypeScript and JSX code. Do NOT output invalid syntax such as stray colons (e.g., key:: value or obj = { : }), missing closing tags, unclosed quotes, or incomplete statements.
       
       Ensure the website is modern, responsive, and fully functional with clean styling and at least 3 pages if appropriate.`,
       {
@@ -449,41 +516,38 @@ export async function autoFixErrorWithAI(
     .map(([path, data]) => `--- FILE: ${path} ---\n${data}\n`)
     .join("\n");
 
-  const prompt = `You are an expert React and Tailwind developer.
-The website's virtual sandbox preview is encountering a compilation, transpilation, syntax, or runtime execution error.
-Your task is to analyze the error message below, find the file containing the bug, fix it, and return the corrected files.
+  const prompt = `You are an expert React and TypeScript developer.
+The React sandbox preview encountered an error. Analyze the error, locate the buggy file, fix it, and return the updated file(s).
 
-ERROR MESSAGE ENCOUNTERED:
+ERROR MESSAGE:
 ${errorMessage}
 
-${errorContext ? `ADDITIONAL ERROR DETAILS / STACK TRACE:\n${errorContext}\n` : ""}
+${errorContext ? `STACK TRACE / DETAILS:\n${errorContext}\n` : ""}
 
-COMMON BUGS TO LOOK FOR:
-1. Syntax error or unclosed tags in TSX files.
-2. Missing, incorrect, or broken relative imports (e.g. trying to import a file that does not exist or has a typo).
-3. React 19 / Babel transpiler type mismatches or uninstantiated hooks.
-4. Undeclared variables, undefined references, or missing types.
+CURRENT WORKSPACE FILES:
+${filesList}
 
-Find the bug, fix it elegantly, and return the COMPLETE updated file structure. Any files you do not modify MUST be returned completely unchanged.
-
-Return the complete updated workspace files inside a JSON array of file descriptors.`;
+REQUIREMENTS:
+1. Identify and fix the bug in the code.
+2. Return a JSON array containing ONLY the file(s) that you modified to fix the issue.
+3. If no changes are required, return an empty JSON array [].`;
 
   try {
     const textResponse = await runLlmRequest(
       prompt,
       {
         type: Type.ARRAY,
-        description: "An array of all files in the workspace (both modified and unmodified) containing path and complete source content.",
+        description: "An array of ONLY modified files containing path and complete updated source content.",
         items: {
           type: Type.OBJECT,
           properties: {
             path: {
               type: Type.STRING,
-              description: "The absolute file path starting with / (e.g. /src/App.tsx, /src/components/Header.tsx)"
+              description: "The absolute file path starting with / (e.g. /src/App.tsx)"
             },
             content: {
               type: Type.STRING,
-              description: "The complete source code content of the file."
+              description: "The complete updated source code content for this file."
             }
           },
           required: ["path", "content"]
@@ -495,25 +559,24 @@ Return the complete updated workspace files inside a JSON array of file descript
     let text = textResponse || "[]";
     text = text.replace(/```json\n?|```/g, "").trim();
     
-    const parsed = JSON.parse(text);
-    const files: FileStructure = {};
+    let parsed: any = [];
+    try {
+      parsed = JSON.parse(text);
+    } catch (_) {
+      const cleaned = text.replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
+      parsed = JSON.parse(cleaned);
+    }
 
-    if (Array.isArray(parsed)) {
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      const merged: FileStructure = { ...currentFiles };
       parsed.forEach((item: any) => {
         if (item && typeof item.path === "string" && typeof item.content === "string") {
-          let cleanPath = item.path;
+          let cleanPath = item.path.trim();
           if (!cleanPath.startsWith("/")) {
             cleanPath = "/" + cleanPath;
           }
-          files[cleanPath] = item.content;
+          merged[cleanPath] = item.content;
         }
-      });
-    }
-
-    if (Object.keys(files).length > 0) {
-      const merged: FileStructure = { ...currentFiles };
-      Object.entries(files).forEach(([path, content]) => {
-        merged[path] = content;
       });
       return merged;
     }
@@ -541,12 +604,13 @@ export async function editWebsiteWithAI(
   const prompt = `You are an expert React and Tailwind developer.
 Your task is to update and edit the existing multi-page React website based on the user's instructions: "${instruction}".
 
-TECHNICAL REQUIREMENTS:
+TECHNICAL & SYNTAX REQUIREMENTS:
 1. Use React with TypeScript (tsx/ts files).
 2. Use Tailwind CSS for all styling (assume it's configured).
 3. Use 'react-router-dom' for multi-page navigation (prefer 'MemoryRouter' for the preview environment).
 4. Use 'lucide-react' for icons.
 5. All imports should be relative.
+6. CRITICAL SYNTAX INTEGRITY: Write 100% clean, valid, executable TypeScript and JSX code. Do NOT output invalid syntax such as stray colons, missing closing tags, unclosed quotes, or malformed object properties.
 
 Return the COMPLETE updated file structure. Any files you do not modify MUST be returned completely unchanged.
 
