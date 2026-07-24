@@ -618,19 +618,11 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         continue;
       }
       try {
-        const isTs = /\.(ts|tsx)$/i.test(path);
-        const isTsx = /\.tsx$/i.test(path);
-
         const presets: any[] = [
           ["env", { modules: "commonjs" }],
-          ["react", { runtime: "automatic" }]
+          ["react", { runtime: "automatic" }],
+          "typescript"
         ];
-
-        if (isTs) {
-          presets.push(["typescript", { isTSX: isTsx, allExtensions: true, allowNamespaces: true }]);
-        } else {
-          presets.push("typescript");
-        }
 
         const res = Babel.transform(fileData.code, {
           presets,
