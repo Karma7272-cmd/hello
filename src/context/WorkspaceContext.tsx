@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import * as Babel from "@babel/standalone";
-import { generateWebsite, editElementWithAI, autoFixErrorWithAI, editWebsiteWithAI, FileStructure } from "../lib/gemini";
+import { generateWebsite, editElementWithAI, autoFixErrorWithAI, editWebsiteWithAI, cleanCodeSyntax, FileStructure } from "../lib/gemini";
 import { 
   auth, 
   signInWithGoogle, 
@@ -98,6 +98,7 @@ interface WorkspaceContextType {
   autoFixEnabled: boolean;
   setAutoFixEnabled: (enabled: boolean) => void;
   triggerAutoFix: (errorMessage: string, errorContext?: string) => Promise<void>;
+  triggerFixAllErrors: () => Promise<void>;
   latestPreviewError: { projectId: string; message: string; context?: string } | null;
   setLatestPreviewError: (error: { projectId: string; message: string; context?: string } | null) => void;
   deviceMode: "desktop" | "tablet" | "mobile";
@@ -621,13 +622,15 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         const normalizedPath = path.replace(/^\//, "");
         const babelFilename = normalizedPath.endsWith(".ts") ? normalizedPath + "x" : (normalizedPath || "file.tsx");
 
+        const cleanCode = cleanCodeSyntax(fileData.code);
+
         const presets: any[] = [
           ["env", { modules: "commonjs" }],
           ["react", { runtime: "automatic" }],
           "typescript"
         ];
 
-        const res = Babel.transform(fileData.code, {
+        const res = Babel.transform(cleanCode, {
           presets,
           filename: babelFilename
         });
@@ -1557,6 +1560,53 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     }
   }, [files, isAutoFixing, isGenerating, autoFixAttempts, runPreview, addLog]);
 
+  const triggerFixAllErrors = useCallback(async () => {
+    if (isAutoFixing || isGenerating) return;
+
+    setIsAutoFixing(true);
+    addLog(`🔧 AI Batch Auto-Fix: Repairing all workspace errors and syntax glitches...`, "command");
+
+    try {
+      const errorList: string[] = [];
+      if (latestPreviewError?.message) {
+        errorList.push(`[Active Preview Error]: ${latestPreviewError.message}`);
+      }
+      logs.forEach(l => {
+        if (l.type === "error" || l.text.includes("❌")) {
+          errorList.push(l.text);
+        }
+      });
+
+      const combinedMessage = errorList.join("\n---\n") || "Workspace transpilation and syntax errors across files.";
+
+      const mappedFiles: Record<string, string> = {};
+      Object.entries(files).forEach(([k, v]) => {
+        mappedFiles[k] = cleanCodeSyntax((v as any).code);
+      });
+
+      const fixedMapped = await autoFixErrorWithAI(mappedFiles, combinedMessage);
+
+      const normalized: Record<string, { code: string }> = {};
+      Object.entries(fixedMapped).forEach(([key, val]) => {
+        const path = key.startsWith("/") ? key : "/" + key;
+        normalized[path] = { code: cleanCodeSyntax(val) };
+      });
+
+      setFiles(normalized);
+      setLatestPreviewError(null);
+      addLog("✔ Batch auto-fix complete! Re-compiling preview...", "success");
+
+      setTimeout(() => {
+        runPreview();
+      }, 100);
+    } catch (err: any) {
+      console.error("Batch auto-fix failed", err);
+      addLog(`❌ Batch auto-fix failed: ${err.message || err}`, "error");
+    } finally {
+      setIsAutoFixing(false);
+    }
+  }, [files, isAutoFixing, isGenerating, latestPreviewError, logs, runPreview, addLog]);
+
   const resetWorkspace = useCallback(() => {
     localStorage.removeItem("stackblitz-workspace-files");
     setActiveProjectId("default-veo-gallery");
@@ -1570,7 +1620,11 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     setSelectedElement(null);
     setInspectModeActive(false);
     addLog("✔ Workspace reset to default template successfully.", "success");
-  }, [clearLogs, addLog, setActiveProjectId]);
+
+    setTimeout(() => {
+      runPreview();
+    }, 100);
+  }, [clearLogs, addLog, setActiveProjectId, runPreview]);
 
   return (
     <WorkspaceContext.Provider
@@ -1618,6 +1672,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         autoFixEnabled,
         setAutoFixEnabled,
         triggerAutoFix,
+        triggerFixAllErrors,
         latestPreviewError,
         setLatestPreviewError,
         deviceMode,

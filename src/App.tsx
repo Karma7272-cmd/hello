@@ -45,7 +45,6 @@ import StackBlitzWorkspace from "./components/StackBlitzWorkspace";
 import HomePage from "./components/HomePage";
 import MobileSettingsView from "./components/MobileSettingsView";
 import CloudConnectorsPopup from "./components/CloudConnectorsPopup";
-import { AILoadBalancerModal } from "./components/AILoadBalancerModal";
 import { PreviewErrorLogModal } from "./components/PreviewErrorLogModal";
 import { cn } from "./lib/utils";
 
@@ -106,7 +105,6 @@ function AppContent() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [simulateTablet, setSimulateTablet] = useState(false);
   const [isConnectorsOpen, setIsConnectorsOpen] = useState(false);
-  const [isLoadBalancerOpen, setIsLoadBalancerOpen] = useState(false);
   const [isErrorLogOpen, setIsErrorLogOpen] = useState(false);
 
   // Interactive message history matching the active workspace
@@ -567,24 +565,6 @@ function AppContent() {
             {isConnectorsOpen && (
               <CloudConnectorsPopup onClose={() => setIsConnectorsOpen(false)} />
             )}
-
-            <div className="h-4 w-px bg-[#2d2d2d]/80 shrink-0" />
-
-            {/* AI Load Balancer Engine Pill Button */}
-            <button
-              onClick={() => setIsLoadBalancerOpen(!isLoadBalancerOpen)}
-              className={cn(
-                "px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shrink-0 text-xs font-bold border",
-                isLoadBalancerOpen
-                  ? "text-purple-300 bg-purple-500/20 border-purple-500/50 shadow-sm shadow-purple-500/20"
-                  : "text-neutral-300 hover:text-white bg-[#18181c] hover:bg-[#202025] border-[#2d2d2d]"
-              )}
-              title="Touch / click to view and control the real-time AI Model Load Balancer Engine"
-            >
-              <Zap className="w-3.5 h-3.5 text-purple-400 fill-purple-400/30" />
-              <span className="hidden sm:inline text-[11px] font-bold">AI Load Balancer</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            </button>
 
             <div className="h-4 w-px bg-[#2d2d2d]/80 shrink-0" />
 
@@ -1348,12 +1328,6 @@ function AppContent() {
           </div>
         )}
       </main>
-
-      {/* Real-time AI Model Load Balancer Control Dashboard */}
-      <AILoadBalancerModal 
-        isOpen={isLoadBalancerOpen} 
-        onClose={() => setIsLoadBalancerOpen(false)} 
-      />
 
       {/* WebContainer Preview Error Log & Fix Dashboard */}
       <PreviewErrorLogModal

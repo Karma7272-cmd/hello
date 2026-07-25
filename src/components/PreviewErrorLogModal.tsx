@@ -48,6 +48,8 @@ export const PreviewErrorLogModal: React.FC<PreviewErrorLogModalProps> = ({ isOp
     openFile, 
     setLayoutMode, 
     triggerAutoFix, 
+    triggerFixAllErrors,
+    resetWorkspace,
     isAutoFixing, 
     runPreview,
     clearLogs
@@ -330,7 +332,7 @@ export const PreviewErrorLogModal: React.FC<PreviewErrorLogModalProps> = ({ isOp
             </div>
           </div>
 
-          {/* Filter Bar */}
+          {/* Filter Bar & Quick Actions */}
           <div className="flex flex-wrap items-center justify-between gap-3 bg-[#16161b] p-3 rounded-xl border border-neutral-800">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-[11px] text-neutral-400 font-semibold mr-1 flex items-center gap-1">
@@ -357,15 +359,37 @@ export const PreviewErrorLogModal: React.FC<PreviewErrorLogModalProps> = ({ isOp
               ))}
             </div>
 
-            {logs.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {parsedErrors.length > 0 && (
+                <button
+                  onClick={triggerFixAllErrors}
+                  disabled={isAutoFixing}
+                  className="px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-indigo-600/20"
+                >
+                  <Sparkles className="w-3.5 h-3.5 animate-spin" />
+                  <span>{isAutoFixing ? "Fixing All..." : "Fix All Errors with AI"}</span>
+                </button>
+              )}
+
               <button
-                onClick={clearLogs}
-                className="text-neutral-500 hover:text-red-400 text-xs flex items-center gap-1 transition-colors cursor-pointer px-2 py-1 rounded hover:bg-neutral-800"
+                onClick={resetWorkspace}
+                className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-amber-300 hover:text-amber-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer rounded-lg border border-neutral-700/60"
+                title="Reset virtual workspace files to clean working initial template"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Clear Logs</span>
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Reset Workspace</span>
               </button>
-            )}
+
+              {logs.length > 0 && (
+                <button
+                  onClick={clearLogs}
+                  className="text-neutral-500 hover:text-red-400 text-xs flex items-center gap-1 transition-colors cursor-pointer px-2 py-1 rounded hover:bg-neutral-800"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Clear Logs</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Parsed Errors List */}

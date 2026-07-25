@@ -1,15 +1,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { aiLoadBalancer } from "./aiLoadBalancer";
 
 export function getAI(overrideApiKey?: string): GoogleGenAI {
   if (overrideApiKey && overrideApiKey.trim()) {
     return new GoogleGenAI({ apiKey: overrideApiKey.trim() });
-  }
-
-  // Check key pool from AI Load Balancer first
-  const poolKey = aiLoadBalancer.getNextApiKey();
-  if (poolKey && poolKey.trim()) {
-    return new GoogleGenAI({ apiKey: poolKey.trim() });
   }
 
   try {
@@ -52,81 +45,24 @@ export async function runLlmRequest(
 
   const customKey = (selectedConnector && selectedConnector.enabled) ? selectedConnector.apiKey?.trim() : undefined;
 
-  // 1. Gemini AI with Load Balancer Node Pool & Auto-Failover
+  // 1. Standard Gemini AI
   if (selectedModelId === "gemini" || !customKey) {
-    const primaryNode = aiLoadBalancer.selectNode();
-    const availableNodes = aiLoadBalancer.getNodes().filter(n => n.status !== "offline");
-    
-    // Ordered nodes: selected primary first, then remaining healthy nodes for failover
-    const attemptOrder = [
-      primaryNode,
-      ...availableNodes.filter(n => n.id !== primaryNode.id)
-    ];
-
-    let lastError: any = null;
-    let failoverFrom: string | undefined = undefined;
-
-    for (let attempt = 0; attempt < attemptOrder.length; attempt++) {
-      const currentNode = attemptOrder[attempt];
-      const startTime = Date.now();
-
-      try {
-        const apiKeyToUse = aiLoadBalancer.getNextApiKey();
-        const ai = getAI(apiKeyToUse);
-        
-        const config: any = {};
-        if (isJson) {
-          config.responseMimeType = "application/json";
-          if (responseSchema) {
-            config.responseSchema = responseSchema;
-          }
-        }
-
-        const response = await ai.models.generateContent({
-          model: currentNode.modelId,
-          contents: prompt,
-          config
-        });
-
-        const latency = Date.now() - startTime;
-        const text = response.text || "";
-
-        if (!text) {
-          throw new Error("Empty response returned from AI node " + currentNode.name);
-        }
-
-        // Record successful load balanced execution
-        aiLoadBalancer.recordResult(
-          currentNode.id,
-          latency,
-          true,
-          prompt,
-          undefined,
-          failoverFrom
-        );
-
-        return text;
-      } catch (err: any) {
-        const latency = Date.now() - startTime;
-        const errorMsg = err?.message || String(err);
-        
-        // Record failed execution
-        aiLoadBalancer.recordResult(
-          currentNode.id,
-          latency,
-          false,
-          prompt,
-          errorMsg,
-          failoverFrom
-        );
-
-        lastError = err;
-        failoverFrom = currentNode.name;
-        console.warn(`[AI Load Balancer] Failover triggered: Node ${currentNode.name} failed (${errorMsg}). Trying next node in pool...`);
+    const ai = getAI(customKey);
+    const config: any = {};
+    if (isJson) {
+      config.responseMimeType = "application/json";
+      if (responseSchema) {
+        config.responseSchema = responseSchema;
       }
     }
 
-    throw new Error(`All AI Load Balancer nodes exhausted. Last error: ${lastError?.message || "Unknown model failure"}`);
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config
+    });
+
+    return response.text || "";
   }
 
   // Helper system instruction extension to enforce JSON structure in non-native schema providers
@@ -507,19 +443,34 @@ ${filesList}
   }
 }
 
+export function cleanCodeSyntax(code: string): string {
+  if (!code) return "";
+  let cleaned = code;
+  
+  // Fix string concatenation in import statements like 'react' + '-router-dom'
+  cleaned = cleaned.replace(/from\s+['"]react['"]\s*\+\s*['"]-router-dom['"]/g, "from 'react-router-dom'");
+  cleaned = cleaned.replace(/from\s+['"]([\w@\.\/-]+)['"]\s*\+\s*['"]([\w@\.\/-]+)['"]/g, (_, p1, p2) => `from '${p1}${p2}'`);
+  cleaned = cleaned.replace(/import\(['"]([\w@\.\/-]+)['"]\s*\+\s*['"]([\w@\.\/-]+)['"]\)/g, (_, p1, p2) => `import('${p1}${p2}')`);
+
+  // Fix escaped template literals or invalid quotes inside template strings
+  cleaned = cleaned.replace(/\\`hsla\(\\ \${/g, "`hsla(${");
+  
+  return cleaned;
+}
+
 export async function autoFixErrorWithAI(
   currentFiles: FileStructure,
   errorMessage: string,
   errorContext?: string
 ): Promise<FileStructure> {
   const filesList = Object.entries(currentFiles)
-    .map(([path, data]) => `--- FILE: ${path} ---\n${data}\n`)
+    .map(([path, data]) => `--- FILE: ${path} ---\n${cleanCodeSyntax(data)}\n`)
     .join("\n");
 
-  const prompt = `You are an expert React and TypeScript developer.
-The React sandbox preview encountered an error. Analyze the error, locate the buggy file, fix it, and return the updated file(s).
+  const prompt = `You are an expert React, TypeScript, and Babel developer.
+The React sandbox preview encountered compiler or runtime errors. Analyze the error message(s), locate ALL buggy or syntax-broken files in the workspace, fix them completely, and return the updated file(s).
 
-ERROR MESSAGE:
+ERROR DETAILS:
 ${errorMessage}
 
 ${errorContext ? `STACK TRACE / DETAILS:\n${errorContext}\n` : ""}
@@ -527,10 +478,11 @@ ${errorContext ? `STACK TRACE / DETAILS:\n${errorContext}\n` : ""}
 CURRENT WORKSPACE FILES:
 ${filesList}
 
-REQUIREMENTS:
-1. Identify and fix the bug in the code.
-2. Return a JSON array containing ONLY the file(s) that you modified to fix the issue.
-3. If no changes are required, return an empty JSON array [].`;
+STRICT CODE SYNTAX & INTEGRITY RULES:
+1. Fix all syntax errors, missing semicolons, unclosed brackets/tags, and invalid imports across all files.
+2. NEVER split package imports like 'react' + '-router-dom'. Use standard import strings: import { ... } from 'react-router-dom'.
+3. Ensure all TypeScript interfaces, functions, JSX elements, and objects are syntactically valid and compile 100% cleanly.
+4. Return a JSON array containing ONLY the file(s) that you modified to fix the issue(s).`;
 
   try {
     const textResponse = await runLlmRequest(
@@ -575,12 +527,18 @@ REQUIREMENTS:
           if (!cleanPath.startsWith("/")) {
             cleanPath = "/" + cleanPath;
           }
-          merged[cleanPath] = item.content;
+          merged[cleanPath] = cleanCodeSyntax(item.content);
         }
       });
       return merged;
     }
-    return currentFiles;
+    
+    // Fallback: also sanitize current files to fix any string concatenation issues automatically
+    const cleanedCurrent: FileStructure = {};
+    Object.entries(currentFiles).forEach(([p, c]) => {
+      cleanedCurrent[p] = cleanCodeSyntax(c);
+    });
+    return cleanedCurrent;
   } catch (e: any) {
     console.error("AI Auto Fix execution error:", e);
     let errorMsg = e.message || String(e);
