@@ -25,7 +25,9 @@ import {
   Plus,
   Tablet,
   Smartphone,
-  Monitor
+  Monitor,
+  Bug,
+  FileCode
 } from "lucide-react";
 import { cn } from "../lib/utils";
 

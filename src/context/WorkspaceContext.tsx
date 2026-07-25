@@ -618,6 +618,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         continue;
       }
       try {
+        const normalizedPath = path.replace(/^\//, "");
+        const babelFilename = normalizedPath.endsWith(".ts") ? normalizedPath + "x" : (normalizedPath || "file.tsx");
+
         const presets: any[] = [
           ["env", { modules: "commonjs" }],
           ["react", { runtime: "automatic" }],
@@ -626,7 +629,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
         const res = Babel.transform(fileData.code, {
           presets,
-          filename: path
+          filename: babelFilename
         });
         compiledModules[path] = res.code || "";
       } catch (err: any) {
@@ -929,6 +932,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           if (loadedLibs[resolvedPath]) {
             return loadedLibs[resolvedPath];
           }
+          if (resolvedPath === "react/jsx-runtime" || resolvedPath === "react/jsx-dev-runtime") {
+            return loadedLibs[resolvedPath] || loadedLibs["react/jsx-runtime"] || loadedLibs["react"] || {};
+          }
           if (resolvedPath.startsWith("react/")) {
             return loadedLibs["react"] || {};
           }
@@ -1016,6 +1022,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         });
 
         externals.add("react");
+        externals.add("react/jsx-runtime");
+        externals.add("react/jsx-dev-runtime");
         externals.add("react-dom");
         externals.add("react-dom/client");
         externals.add("lucide-react");
@@ -1028,6 +1036,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           Array.from(externals).map(async (lib) => {
             let url = "";
             if (lib === "react") url = "https://esm.sh/react@19";
+            else if (lib === "react/jsx-runtime") url = "https://esm.sh/react@19/jsx-runtime";
+            else if (lib === "react/jsx-dev-runtime") url = "https://esm.sh/react@19/jsx-runtime";
             else if (lib === "react-dom") url = "https://esm.sh/react-dom@19";
             else if (lib === "react-dom/client") url = "https://esm.sh/react-dom@19/client";
             else if (lib === "lucide-react") url = "https://esm.sh/lucide-react@0.468.0?external=react,react-dom";

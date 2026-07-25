@@ -46,6 +46,7 @@ import HomePage from "./components/HomePage";
 import MobileSettingsView from "./components/MobileSettingsView";
 import CloudConnectorsPopup from "./components/CloudConnectorsPopup";
 import { AILoadBalancerModal } from "./components/AILoadBalancerModal";
+import { PreviewErrorLogModal } from "./components/PreviewErrorLogModal";
 import { cn } from "./lib/utils";
 
 function AppContent() {
@@ -106,6 +107,7 @@ function AppContent() {
   const [simulateTablet, setSimulateTablet] = useState(false);
   const [isConnectorsOpen, setIsConnectorsOpen] = useState(false);
   const [isLoadBalancerOpen, setIsLoadBalancerOpen] = useState(false);
+  const [isErrorLogOpen, setIsErrorLogOpen] = useState(false);
 
   // Interactive message history matching the active workspace
   const [messages, setMessages] = useState<Array<{
@@ -582,6 +584,30 @@ function AppContent() {
               <Zap className="w-3.5 h-3.5 text-purple-400 fill-purple-400/30" />
               <span className="hidden sm:inline text-[11px] font-bold">AI Load Balancer</span>
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            </button>
+
+            <div className="h-4 w-px bg-[#2d2d2d]/80 shrink-0" />
+
+            {/* Preview Error Log Dashboard Pill Button */}
+            <button
+              onClick={() => setIsErrorLogOpen(!isErrorLogOpen)}
+              className={cn(
+                "px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shrink-0 text-xs font-bold border relative",
+                isErrorLogOpen
+                  ? "text-red-300 bg-red-500/20 border-red-500/50 shadow-sm shadow-red-500/20"
+                  : latestPreviewError && latestPreviewError.projectId === activeProjectId
+                  ? "text-red-400 bg-red-950/50 hover:bg-red-900/60 border-red-500/40 animate-pulse"
+                  : "text-neutral-300 hover:text-white bg-[#18181c] hover:bg-[#202025] border-[#2d2d2d]"
+              )}
+              title="View detailed WebContainer Preview Error Log & Actionable Fixes"
+            >
+              <Bug className={cn("w-3.5 h-3.5", latestPreviewError && latestPreviewError.projectId === activeProjectId ? "text-red-400" : "text-amber-400")} />
+              <span className="hidden sm:inline text-[11px] font-bold">Error Log</span>
+              {latestPreviewError && latestPreviewError.projectId === activeProjectId ? (
+                <span className="px-1.5 py-0.2 text-[9px] bg-red-500 text-white rounded-full font-black">1</span>
+              ) : (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              )}
             </button>
           </div>
         </div>
@@ -1327,6 +1353,12 @@ function AppContent() {
       <AILoadBalancerModal 
         isOpen={isLoadBalancerOpen} 
         onClose={() => setIsLoadBalancerOpen(false)} 
+      />
+
+      {/* WebContainer Preview Error Log & Fix Dashboard */}
+      <PreviewErrorLogModal
+        isOpen={isErrorLogOpen}
+        onClose={() => setIsErrorLogOpen(false)}
       />
 
       <style>{`
