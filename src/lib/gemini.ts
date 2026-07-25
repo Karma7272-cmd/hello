@@ -78,7 +78,8 @@ export async function runLlmRequest(
         if (isJson) {
           config.responseMimeType = "application/json";
           if (responseSchema) {
-            config.responseSchema = responseSchema;
+            // Use responseJsonSchema for SDK v1.9.0+ compatibility
+            config.responseJsonSchema = responseSchema;
           }
         }
 
