@@ -457,7 +457,7 @@ export default function LivePreviewFrame() {
         ref={containerRef}
         className="flex-1 bg-[#0c0c0c] relative flex flex-col min-h-0"
       >
-        {showStarterTemplates || !previewHtml ? (
+        {showStarterTemplates || !previewUrl ? (
           <StarterWelcomeTemplate 
             onSelectTemplate={handleSelectStarter}
             isGenerating={isGenerating}
@@ -483,11 +483,11 @@ export default function LivePreviewFrame() {
                 <iframe
                   key={reloadKey}
                   ref={iframeRef}
-                  srcDoc={previewHtml}
+                  src={previewUrl || "about:blank"}
                   className="w-full h-full border-none bg-[#0c0c0c]"
                   title="Live Preview"
                   allow="accelerometer; ambient-light-sensor; camera; encrypted-media; geolocation; gyroscope; hid; microphone; midi; payment; usb; vr; xr-spatial-tracking"
-                  sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
+                  sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts allow-downloads allow-pointer-lock"
                 />
               </div>
             </div>
@@ -513,11 +513,11 @@ export default function LivePreviewFrame() {
                 <iframe
                   key={reloadKey}
                   ref={iframeRef}
-                  srcDoc={previewHtml}
+                  src={previewUrl || "about:blank"}
                   className="w-full h-full border-none bg-[#0c0c0c]"
                   title="Live Preview"
                   allow="accelerometer; ambient-light-sensor; camera; encrypted-media; geolocation; gyroscope; hid; microphone; midi; payment; usb; vr; xr-spatial-tracking"
-                  sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
+                  sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts allow-downloads allow-pointer-lock"
                 />
               </div>
             </div>
@@ -526,11 +526,11 @@ export default function LivePreviewFrame() {
           <iframe
             key={reloadKey}
             ref={iframeRef}
-            srcDoc={previewHtml}
+            src={previewUrl || "about:blank"}
             className="w-full h-full border-none bg-[#0c0c0c]"
             title="Live Preview"
             allow="accelerometer; ambient-light-sensor; camera; encrypted-media; geolocation; gyroscope; hid; microphone; midi; payment; usb; vr; xr-spatial-tracking"
-            sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
+            sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts allow-downloads allow-pointer-lock"
           />
         )}
 

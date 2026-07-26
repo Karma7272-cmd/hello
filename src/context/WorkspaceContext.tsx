@@ -606,576 +606,102 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Main client-side ES Modules compiler
-  const runPreview = useCallback(() => {
-    addLog("⚡ Starting compilation of virtual workspace...", "command");
+  const runPreview = useCallback(async () => {
+    addLog("⚡ Booting WebContainer...", "command");
+    setIsBooted(false);
+    setIsInstalling(true);
     
-    const compiledModules: Record<string, string> = {};
-    let hasTranspilationError = false;
-
-    for (const [path, data] of Object.entries(files)) {
-      const fileData = data as { code: string };
-      // Skip non-transpilable files (HTML, CSS, JSON, SVG, images, etc.)
-      if (!/\.(js|jsx|ts|tsx|mjs|cjs)$/i.test(path)) {
-        continue;
-      }
-      try {
-        const normalizedPath = path.replace(/^\//, "");
-        const babelFilename = normalizedPath.endsWith(".ts") ? normalizedPath + "x" : (normalizedPath || "file.tsx");
-
-        const cleanCode = cleanCodeSyntax(fileData.code);
-
-        const presets: any[] = [
-          ["env", { modules: "commonjs" }],
-          ["react", { runtime: "automatic" }],
-          "typescript"
-        ];
-
-        const res = Babel.transform(cleanCode, {
-          presets,
-          filename: babelFilename
-        });
-        compiledModules[path] = res.code || "";
-      } catch (err: any) {
-        hasTranspilationError = true;
-        addLog(`❌ Transpilation error in ${path}: ${err.message}`, "error");
-        compiledModules[path] = `throw new Error(${JSON.stringify(`Transpilation error in ${path}: ` + err.message)});`;
-        setLatestPreviewError({ projectId: activeProjectId || "default", message: `Transpilation error in ${path}: ${err.message}`, context: err.stack });
-      }
-    }
-
-    if (!hasTranspilationError) {
-      setLatestPreviewError(null);
-    }
-
     try {
-      const modulesJson = JSON.stringify(compiledModules).replace(/</g, "\\u003c");
-      const rawFilesJson = JSON.stringify(Object.fromEntries(
-        Object.entries(files).map(([k, v]) => [k, (v as any).code])
-      )).replace(/</g, "\\u003c");
-
-      const htmlContent = `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WebContainer Preview</title>
-    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
-    <style>
-      body {
-        margin: 0;
-        padding: 0;
-        background-color: #0c0c0c;
-        color: #eaeaea;
-        font-family: system-ui, -apple-system, sans-serif;
-      }
-    </style>
-    <script>
-      // Capture console logs and forward them to the parent window
-      const _log = console.log;
-      const _error = console.error;
-      const _warn = console.warn;
-      const _info = console.info;
-
-      window.console.log = (...args) => {
-        _log(...args);
-        window.parent.postMessage({ type: "CONSOLE_LOG", text: args.join(" "), logType: "output" }, "*");
-      };
-      window.console.error = (...args) => {
-        _error(...args);
-        window.parent.postMessage({ type: "CONSOLE_LOG", text: args.join(" "), logType: "error" }, "*");
-      };
-      window.console.warn = (...args) => {
-        _warn(...args);
-        window.parent.postMessage({ type: "CONSOLE_LOG", text: args.join(" "), logType: "info" }, "*");
-      };
-      window.console.info = (...args) => {
-        _info(...args);
-        window.parent.postMessage({ type: "CONSOLE_LOG", text: args.join(" "), logType: "info" }, "*");
-      };
-
-      window.addEventListener("error", (e) => {
-        console.error("Uncaught runtime error:", e.error || e.message);
-        window.parent.postMessage({ type: "UNCAUGHT_RUNTIME_ERROR", message: e.message, stack: e.error ? e.error.stack : "" }, "*");
-      });
-
-      window.addEventListener("unhandledrejection", (e) => {
-        console.error("Unhandled promise rejection:", e.reason);
-        window.parent.postMessage({ type: "UNCAUGHT_RUNTIME_ERROR", message: String(e.reason?.message || e.reason), stack: e.reason?.stack || "" }, "*");
-      });
-
-      window.__INSPECT_MODE_ACTIVE__ = false;
-
-      window.addEventListener("message", (event) => {
-        if (event.data && event.data.type === "SET_INSPECT_MODE") {
-          window.__INSPECT_MODE_ACTIVE__ = event.data.active;
-          const overlay = document.getElementById("ai-hover-overlay");
-          if (overlay && !event.data.active) {
-            overlay.style.display = "none";
+      const { getWebContainer } = await import("../lib/webcontainer");
+      const wc = await getWebContainer();
+      
+      // Convert files map to WebContainer file system tree
+      const tree = {};
+      
+      const addFileToTree = (path, contents) => {
+        const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+        const parts = cleanPath.split('/').filter(Boolean);
+        let current = tree;
+        
+        for (let i = 0; i < parts.length - 1; i++) {
+          const part = parts[i];
+          if (!current[part]) {
+            current[part] = { directory: {} };
           }
+          current = current[part].directory;
         }
-      });
-
-      window.addEventListener("DOMContentLoaded", () => {
-        let hoverOverlay = document.getElementById("ai-hover-overlay");
-        if (!hoverOverlay) {
-          hoverOverlay = document.createElement("div");
-          hoverOverlay.id = "ai-hover-overlay";
-          hoverOverlay.style.position = "fixed";
-          hoverOverlay.style.pointerEvents = "none";
-          hoverOverlay.style.border = "2px dashed #6366f1";
-          hoverOverlay.style.backgroundColor = "rgba(99, 102, 241, 0.15)";
-          hoverOverlay.style.transition = "all 0.08s ease-out";
-          hoverOverlay.style.zIndex = "999999";
-          hoverOverlay.style.display = "none";
-          
-          const label = document.createElement("div");
-          label.id = "ai-hover-label";
-          label.style.position = "absolute";
-          label.style.top = "-24px";
-          label.style.left = "0";
-          label.style.backgroundColor = "#6366f1";
-          label.style.color = "white";
-          label.style.fontSize = "10px";
-          label.style.fontFamily = "monospace";
-          label.style.padding = "2px 6px";
-          label.style.borderRadius = "4px";
-          label.style.whiteSpace = "nowrap";
-          label.style.fontWeight = "bold";
-          hoverOverlay.appendChild(label);
-          
-          document.body.appendChild(hoverOverlay);
-        }
-
-        window.addEventListener("mouseover", (e) => {
-          if (!window.__INSPECT_MODE_ACTIVE__) return;
-          const el = e.target;
-          if (!el || el === document.body || el === document.documentElement || el.id === "ai-hover-overlay" || el.closest("#ai-hover-overlay")) return;
-          
-          const rect = el.getBoundingClientRect();
-          hoverOverlay.style.width = rect.width + "px";
-          hoverOverlay.style.height = rect.height + "px";
-          hoverOverlay.style.top = rect.top + "px";
-          hoverOverlay.style.left = rect.left + "px";
-          hoverOverlay.style.display = "block";
-          
-          const label = document.getElementById("ai-hover-label");
-          if (label) {
-            let classes = el.className;
-            if (typeof classes === "string") {
-              classes = classes.split(" ").filter(c => c && !c.includes(":")).slice(0, 3).join(".");
-              if (classes) classes = "." + classes;
-            } else {
-              classes = "";
-            }
-            label.textContent = el.tagName.toLowerCase() + classes;
-          }
-        }, true);
-
-        window.addEventListener("mouseout", (e) => {
-          if (!window.__INSPECT_MODE_ACTIVE__) return;
-          hoverOverlay.style.display = "none";
-        }, true);
-
-        window.addEventListener("click", (e) => {
-          if (!window.__INSPECT_MODE_ACTIVE__) return;
-          const el = e.target;
-          if (!el || el === document.body || el === document.documentElement || el.id === "ai-hover-overlay" || el.closest("#ai-hover-overlay")) return;
-          
-          e.preventDefault();
-          e.stopPropagation();
-          
-          hoverOverlay.style.display = "none";
-          
-          const rect = el.getBoundingClientRect();
-          const info = {
-            tagName: el.tagName,
-            id: el.id,
-            className: typeof el.className === "string" ? el.className : "",
-            innerText: el.innerText ? el.innerText.substring(0, 300) : "",
-            outerHTML: el.outerHTML,
-            parentTag: el.parentElement ? el.parentElement.tagName : null,
-            box: {
-              top: rect.top,
-              left: rect.left,
-              width: rect.width,
-              height: rect.height
+        
+        const fileName = parts[parts.length - 1];
+        if (fileName) {
+          current[fileName] = {
+            file: {
+              contents: contents
             }
           };
-          
-          window.parent.postMessage({ type: "ELEMENT_CLICKED", element: info }, "*");
-        }, true);
+        }
+      };
+
+      for (const [path, data] of Object.entries(files)) {
+        addFileToTree(path, data.code);
+      }
+      
+      addLog("Mounting files to virtual filesystem...", "info");
+      await wc.mount(tree);
+      
+      setIsBooted(true);
+      
+      // Install dependencies
+      addLog("npm install", "command");
+      const installProcess = await wc.spawn("npm", ["install"]);
+      
+      installProcess.output.pipeTo(
+        new WritableStream({
+          write(data) {
+            addLog(data, "output");
+          }
+        })
+      );
+      
+      const installExitCode = await installProcess.exit;
+      setIsInstalling(false);
+      
+      if (installExitCode !== 0) {
+        addLog("❌ npm install failed", "error");
+        return;
+      }
+      
+      // Start dev server
+      addLog("npm run dev", "command");
+      const devProcess = await wc.spawn("npm", ["run", "dev"]);
+      
+      devProcess.output.pipeTo(
+        new WritableStream({
+          write(data) {
+            addLog(data, "output");
+          }
+        })
+      );
+      
+      // Listen for server ready
+      wc.on('server-ready', (port, url) => {
+        addLog(`Server ready on port ${port}: ${url}`, "success");
+        setPreviewUrl(url);
+        setPreviewHtml(""); // Clear old iframe doc
+        setIsRunning(true);
       });
-    </script>
-    <script id="__COMPILED_MODULES_DATA__" type="application/json">
-      ${modulesJson}
-    </script>
-    <script id="__RAW_FILES_DATA__" type="application/json">
-      ${rawFilesJson}
-    </script>
-    <script>
-      try {
-        window.__COMPILED_MODULES__ = JSON.parse(document.getElementById("__COMPILED_MODULES_DATA__").textContent || "{}");
-      } catch (e) {
-        window.__COMPILED_MODULES__ = {};
-      }
-      try {
-        window.__RAW_FILES__ = JSON.parse(document.getElementById("__RAW_FILES_DATA__").textContent || "{}");
-      } catch (e) {
-        window.__RAW_FILES__ = {};
-      }
-    </script>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module">
-      const modules = window.__COMPILED_MODULES__;
-      const rawFiles = window.__RAW_FILES__;
-      const cache = {};
-      const loadedLibs = {};
-
-      function findFileKey(targetPath) {
-        if (!targetPath) return null;
-        if (targetPath.startsWith("@/")) {
-          targetPath = "/src/" + targetPath.substring(2);
-        }
-        if (modules[targetPath] !== undefined || rawFiles[targetPath] !== undefined) {
-          return targetPath;
-        }
-        const extensions = ["", ".tsx", ".ts", ".jsx", ".js", ".css", ".json", ".d.ts", "/index.tsx", "/index.ts", "/index.jsx", "/index.js"];
-        for (const ext of extensions) {
-          const baseCandidate = targetPath + ext;
-          const candidates = [baseCandidate];
-          if (baseCandidate.startsWith("/src/")) {
-            candidates.push(baseCandidate.substring(4));
-            candidates.push(baseCandidate.substring(5));
-          } else {
-            candidates.push("/src" + baseCandidate);
-            candidates.push("src" + baseCandidate);
-          }
-          if (baseCandidate.startsWith("/")) {
-            candidates.push(baseCandidate.substring(1));
-          } else {
-            candidates.push("/" + baseCandidate);
-          }
-          for (const cand of candidates) {
-            if (modules[cand] !== undefined || rawFiles[cand] !== undefined) {
-              return cand;
-            }
-          }
-        }
-        return null;
-      }
-
-      function resolveRelativePath(fromPath, relativePath) {
-        const cleanFrom = fromPath.startsWith("/") ? fromPath : "/" + fromPath;
-        const parts = cleanFrom.split("/").filter(Boolean);
-        parts.pop();
-        
-        const relParts = relativePath.split("/").filter(Boolean);
-        for (const part of relParts) {
-          if (part === ".") continue;
-          if (part === "..") {
-            parts.pop();
-          } else {
-            parts.push(part);
-          }
-        }
-        
-        const absolute = "/" + parts.join("/");
-        const matchedKey = findFileKey(absolute);
-        return matchedKey || absolute;
-      }
-
-      function injectCSS(path, content) {
-        const styleId = "style-" + path.replace(/[^a-zA-Z0-9]/g, "-");
-        let style = document.getElementById(styleId);
-        if (!style) {
-          style = document.createElement("style");
-          style.id = styleId;
-          document.head.appendChild(style);
-        }
-        style.textContent = content;
-      }
-
-      function requireModule(fromPath, targetPath) {
-        let resolvedPath = targetPath;
-        if (targetPath.startsWith("@/")) {
-          resolvedPath = "/src/" + targetPath.substring(2);
-          resolvedPath = findFileKey(resolvedPath) || resolvedPath;
-        } else if (targetPath.startsWith(".")) {
-          resolvedPath = resolveRelativePath(fromPath, targetPath);
-        } else if (targetPath.startsWith("/")) {
-          resolvedPath = findFileKey(targetPath) || targetPath;
-        } else {
-          const matchedWorkspaceKey = findFileKey(targetPath);
-          if (matchedWorkspaceKey) {
-            resolvedPath = matchedWorkspaceKey;
-          }
-        }
-
-        if (cache[resolvedPath]) {
-          return cache[resolvedPath].exports;
-        }
-
-        if (resolvedPath.endsWith(".css")) {
-          const cssContent = rawFiles[resolvedPath] || "";
-          injectCSS(resolvedPath, cssContent);
-          return {};
-        }
-
-        if (resolvedPath.endsWith(".json")) {
-          try {
-            return JSON.parse(rawFiles[resolvedPath] || "{}");
-          } catch (err) {
-            return {};
-          }
-        }
-
-        if (!resolvedPath.startsWith("/")) {
-          if (loadedLibs[resolvedPath]) {
-            return loadedLibs[resolvedPath];
-          }
-          if (resolvedPath === "react/jsx-runtime" || resolvedPath === "react/jsx-dev-runtime") {
-            return loadedLibs[resolvedPath] || loadedLibs["react/jsx-runtime"] || loadedLibs["react"] || {};
-          }
-          if (resolvedPath.startsWith("react/")) {
-            return loadedLibs["react"] || {};
-          }
-          if (resolvedPath.startsWith("lucide-react/")) {
-            return loadedLibs["lucide-react"] || {};
-          }
-          if (resolvedPath.startsWith("react-router-dom/")) {
-            return loadedLibs["react-router-dom"] || {};
-          }
-          const basePkg = resolvedPath.startsWith("@") ? resolvedPath.split("/").slice(0, 2).join("/") : resolvedPath.split("/")[0];
-          if (loadedLibs[basePkg]) {
-            return loadedLibs[basePkg];
-          }
-
-          const workspaceKey = findFileKey(resolvedPath);
-          if (workspaceKey && workspaceKey.startsWith("/")) {
-            return requireModule(fromPath, workspaceKey);
-          }
-          console.warn("External package missing, returning empty fallback module:", resolvedPath);
-          return loadedLibs[resolvedPath] || {};
-        }
-
-        let code = modules[resolvedPath];
-        if (code === undefined) {
-          const matchedKey = findFileKey(resolvedPath);
-          if (matchedKey && modules[matchedKey] !== undefined) {
-            resolvedPath = matchedKey;
-            code = modules[matchedKey];
-          }
-        }
-
-        if (code === undefined) {
-          if (rawFiles[resolvedPath] !== undefined) {
-            return {};
-          }
-          console.warn("Module not found in virtual workspace, returning empty fallback module:", resolvedPath);
-          return {};
-        }
-
-        const module = { exports: {} };
-        cache[resolvedPath] = module;
-
-        const localRequire = (pkgPath) => requireModule(resolvedPath, pkgPath);
-
-        try {
-          const fn = new Function("require", "module", "exports", code + "\\n//# sourceURL=" + resolvedPath);
-          fn(localRequire, module, module.exports);
-        } catch (err) {
-          console.error("Runtime execution error in " + resolvedPath + ":", err);
-          return module.exports || {};
-        }
-
-        return module.exports;
-      }
-
-      function interopModule(mod) {
-        if (!mod) return mod;
-        return new Proxy(mod, {
-          get(target, prop) {
-            if (prop === "default") {
-              return target.default !== undefined ? target.default : target;
-            }
-            if (prop === "__esModule") {
-              return true;
-            }
-            return target[prop];
-          }
-        });
-      }
-
-      async function loadDependenciesAndBoot() {
-        const externals = new Set();
-        const requireRegex = /require\\((['"])([^'"]+)\\1\\)/g;
-
-        Object.values(modules).forEach(code => {
-          let match;
-          while ((match = requireRegex.exec(code)) !== null) {
-            const dep = match[2];
-            if (!dep.startsWith(".") && !dep.startsWith("/")) {
-              const basePkg = dep.startsWith("@") ? dep.split("/").slice(0, 2).join("/") : dep.split("/")[0];
-              externals.add(basePkg);
-              externals.add(dep);
-            }
-          }
-        });
-
-        externals.add("react");
-        externals.add("react/jsx-runtime");
-        externals.add("react/jsx-dev-runtime");
-        externals.add("react-dom");
-        externals.add("react-dom/client");
-        externals.add("lucide-react");
-        externals.add("clsx");
-        externals.add("tailwind-merge");
-        externals.add("framer-motion");
-        externals.add("react-router-dom");
-
-        await Promise.all(
-          Array.from(externals).map(async (lib) => {
-            let url = "";
-            if (lib === "react") url = "https://esm.sh/react@19";
-            else if (lib === "react/jsx-runtime") url = "https://esm.sh/react@19/jsx-runtime";
-            else if (lib === "react/jsx-dev-runtime") url = "https://esm.sh/react@19/jsx-runtime";
-            else if (lib === "react-dom") url = "https://esm.sh/react-dom@19";
-            else if (lib === "react-dom/client") url = "https://esm.sh/react-dom@19/client";
-            else if (lib === "lucide-react") url = "https://esm.sh/lucide-react@0.468.0?external=react,react-dom";
-            else if (lib === "motion/react") url = "https://esm.sh/motion/react@12.0.0-alpha.2?external=react,react-dom";
-            else if (lib === "framer-motion") url = "https://esm.sh/framer-motion@11.15.0?external=react,react-dom";
-            else url = "https://esm.sh/" + lib + "?external=react,react-dom";
-
-            try {
-              const mod = await import(url);
-              loadedLibs[lib] = interopModule(mod);
-            } catch (err) {
-              console.error("Failed to load external dependency " + lib + ":", err);
-            }
-          })
-        );
-
-        try {
-          // Check for App component first, or main entry point
-          const appComponentKeys = ["/src/App.tsx", "/App.tsx", "/src/App.jsx", "/App.jsx"];
-          const appComponentKey = appComponentKeys.find(key => modules[key] !== undefined);
-
-          let AppComponent: any = null;
-          if (appComponentKey) {
-            const appExports = requireModule("/", appComponentKey);
-            AppComponent = appExports.default || appExports;
-          } else {
-            const entryKeys = ["/src/main.tsx", "/src/index.tsx", "/src/App.tsx", "/App.tsx", "/index.tsx"];
-            const entryKey = entryKeys.find(key => modules[key] !== undefined || rawFiles[key] !== undefined) || Object.keys(modules)[0];
-
-            if (!entryKey) {
-              throw new Error("No files found in virtual workspace.");
-            }
-
-            const entryExports = requireModule("/", entryKey);
-            AppComponent = entryExports.default || entryExports;
-          }
-
-          // Verify if AppComponent is a valid React component (function or object with $$typeof / render)
-          const isValidComponent = typeof AppComponent === "function" ||
-            (typeof AppComponent === "object" && AppComponent !== null && (AppComponent.$$typeof || typeof AppComponent.render === "function"));
-
-          if (isValidComponent) {
-            const React = loadedLibs["react"];
-            const ReactDOMClient = loadedLibs["react-dom/client"];
-
-            class ErrorBoundary extends React.Component {
-              constructor(props) {
-                super(props);
-                this.state = { hasError: false, error: null };
-              }
-              static getDerivedStateFromError(error) {
-                return { hasError: true, error };
-              }
-              componentDidCatch(error, errorInfo) {
-                console.error("React render error caught by ErrorBoundary:", error, errorInfo);
-                window.parent.postMessage({
-                  type: "UNCAUGHT_RUNTIME_ERROR",
-                  message: error.message || String(error),
-                  stack: (errorInfo && errorInfo.componentStack) || error.stack || ""
-                }, "*");
-              }
-              render() {
-                if (this.state.hasError) {
-                  return React.createElement("div", {
-                    style: {
-                      padding: "24px",
-                      color: "#f87171",
-                      backgroundColor: "#121217",
-                      border: "1px solid #27272a",
-                      borderRadius: "16px",
-                      margin: "20px",
-                      fontFamily: "system-ui, sans-serif",
-                      fontSize: "13px",
-                      lineHeight: "1.6"
-                    }
-                  },
-                    React.createElement("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" } },
-                      React.createElement("span", { style: { fontSize: "18px" } }, "⚠️"),
-                      React.createElement("h3", { style: { margin: 0, color: "#f87171", fontSize: "15px", fontWeight: "700" } }, "Preview Component Error")
-                    ),
-                    React.createElement("p", { style: { margin: "0 0 12px 0", color: "#d4d4d8" } }, this.state.error?.message || "An unexpected error occurred during rendering."),
-                    React.createElement("pre", { style: { overflowX: "auto", fontSize: "11px", fontFamily: "monospace", color: "#a1a1aa", backgroundColor: "#09090b", padding: "12px", borderRadius: "8px", border: "1px solid #18181b" } }, this.state.error?.stack || "")
-                  );
-                }
-                return this.props.children;
-              }
-            }
-
-            const root = ReactDOMClient.createRoot(document.getElementById("root"));
-            root.render(React.createElement(ErrorBoundary, null, React.createElement(AppComponent)));
-          } else {
-            // If main.tsx was required and executed createRoot directly, nothing more needed if root has children
-            const rootEl = document.getElementById("root");
-            if (!rootEl || rootEl.children.length === 0) {
-              console.warn("Entry point did not produce a default export component or mount to #root.");
-            }
-          }
-        } catch (err) {
-          console.error("Failed to boot applet:", err);
-          window.parent.postMessage({ type: "PREVIEW_BOOT_ERROR", message: err.message, stack: err.stack }, "*");
-          
-          if (!${autoFixEnabled}) {
-            const errorDiv = document.createElement("div");
-            errorDiv.style.padding = "20px";
-            errorDiv.style.color = "#ef4444";
-            errorDiv.style.fontFamily = "monospace";
-            errorDiv.style.backgroundColor = "#18181b";
-            errorDiv.style.border = "1px solid #27272a";
-            errorDiv.style.borderRadius = "8px";
-            errorDiv.style.margin = "20px";
-            errorDiv.innerHTML = "<h3>Boot Error</h3><pre>" + err.stack + "</pre>";
-            document.body.appendChild(errorDiv);
-          }
-        }
-      }
-
-      loadDependenciesAndBoot();
-    </script>
-  </body>
-</html>`;
-
-      setPreviewHtml(htmlContent);
-
-      const htmlBlob = new Blob([htmlContent], { type: "text/html" });
-      const iframeUrl = URL.createObjectURL(htmlBlob);
-      setPreviewUrl(iframeUrl);
-
-      addLog("✔ Build succeeded - the applet compiles perfectly", "success");
-      addLog("  ➜  Local Server Running: http://localhost:5173/", "info");
-    } catch (err: any) {
-      addLog(`❌ Build failed: ${err.message}`, "error");
+      
+      wc.on('error', (err) => {
+        addLog(`WebContainer error: ${err.message}`, "error");
+      });
+      
+    } catch (err) {
+      addLog(`❌ Boot error: ${err.message}`, "error");
+      setLatestPreviewError({ projectId: activeProjectId || "default", message: err.message });
+      setIsInstalling(false);
+      setIsBooted(false);
     }
-  }, [files, addLog]);
+  }, [files, activeProjectId, addLog]);
 
-  // Boot simulation of WebContainers
   const restartDevServer = useCallback(() => {
     setIsBooted(false);
     setIsInstalling(false);
