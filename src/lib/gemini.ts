@@ -57,7 +57,7 @@ export async function runLlmRequest(
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.0-flash",
       contents: prompt,
       config
     });
@@ -202,21 +202,48 @@ export interface FileStructure {
   [path: string]: string;
 }
 
+// ============================================================================
+// OPTIMIZED PROMPT TEMPLATES
+// ============================================================================
+
+const CORE_TECH_REQUIREMENTS = `CORE TECHNICAL REQUIREMENTS:
+- Language: React + TypeScript (tsx/ts)
+- Styling: Tailwind CSS only (no inline styles)
+- Routing: react-router-dom with MemoryRouter
+- Icons: lucide-react
+- Entry point: /src/App.tsx (required)
+- Import paths: Always use relative paths (e.g., "./components/Header")`;
+
+const CRITICAL_SYNTAX_RULES = `CRITICAL SYNTAX RULES (NON-NEGOTIABLE):
+- Generate 100% valid, executable TypeScript/JSX
+- NO stray colons, unclosed tags, unmatched braces, or unescaped quotes
+- NO string concatenation in imports (e.g., 'react' + '-router-dom' is FORBIDDEN)
+- NO split module names across lines or expressions
+- All closing tags and parentheses must match opening ones
+- All JSX elements must be properly closed (<Component /> or <Component></Component>)
+- No trailing/leading spaces in JSON output`;
+
+const SCHEMA_INSTRUCTIONS = `OUTPUT FORMAT:
+Return a JSON array with objects containing "path" (absolute, starting with /) and "content" (full file code).
+Example: [{"path": "/src/App.tsx", "content": "import React from 'react'; ..."}]`;
+
 export async function generateWebsite(prompt: string): Promise<FileStructure> {
   try {
     const textResponse = await runLlmRequest(
-      `Generate a complete multi-page React website based on this prompt: "${prompt}".
+      `Generate a complete, multi-page React website based on this requirement: "${prompt}"
       
-      TECHNICAL & SYNTAX REQUIREMENTS:
-      1. Use React with TypeScript (tsx/ts files).
-      2. Use Tailwind CSS for all styling (assume it's configured).
-      3. Use 'react-router-dom' for multi-page navigation (prefer 'MemoryRouter' for the preview environment).
-      4. Use 'lucide-react' for icons.
-      5. The main entry point MUST be "/src/App.tsx".
-      6. All imports MUST be valid relative paths (e.g., "./components/Header").
-      7. CRITICAL SYNTAX INTEGRITY: Write 100% clean, valid, executable TypeScript and JSX code. Do NOT output invalid syntax such as stray colons (e.g., key:: value or obj = { : }), missing closing tags, unclosed quotes, or incomplete statements.
-      
-      Ensure the website is modern, responsive, and fully functional with clean styling and at least 3 pages if appropriate.`,
+${CORE_TECH_REQUIREMENTS}
+
+DESIGN PRINCIPLES:
+- Modern, responsive, and accessible
+- At least 3 pages if appropriate for the requirement
+- Clean component structure with proper separation of concerns
+- Use Tailwind for consistent, professional styling
+- Ensure smooth routing between pages
+
+${CRITICAL_SYNTAX_RULES}
+
+${SCHEMA_INSTRUCTIONS}`,
       {
         type: Type.ARRAY,
         description: "An array of generated file descriptors containing path and source content.",
@@ -225,11 +252,11 @@ export async function generateWebsite(prompt: string): Promise<FileStructure> {
           properties: {
             path: {
               type: Type.STRING,
-              description: "The absolute file path starting with / (e.g. /src/App.tsx, /src/components/Header.tsx)"
+              description: "Absolute file path starting with / (e.g., /src/App.tsx)"
             },
             content: {
               type: Type.STRING,
-              description: "The complete source code content of the file."
+              description: "Complete, valid source code for this file"
             }
           },
           required: ["path", "content"]
@@ -239,17 +266,15 @@ export async function generateWebsite(prompt: string): Promise<FileStructure> {
     );
 
     let text = textResponse || "[]";
-    // Clean up potential markdown artifacts
     text = text.replace(/```json\n?|```/g, "").trim();
     
     let parsed: any;
     try {
       parsed = JSON.parse(text);
     } catch (parseErr) {
-      console.warn("Standard JSON parse failed, attempting regex-based cleanup...", parseErr);
-      // Clean control characters and some unescaped quotes if any
+      console.warn("Standard JSON parse failed, attempting cleanup...", parseErr);
       const cleaned = text
-        .replace(/[\u0000-\u001F\u007F-\u009F]/g, "") // remove control chars
+        .replace(/[\u0000-\u001F\u007F-\u009F]/g, "")
         .trim();
       parsed = JSON.parse(cleaned);
     }
@@ -267,7 +292,6 @@ export async function generateWebsite(prompt: string): Promise<FileStructure> {
         }
       });
     } else if (typeof parsed === "object" && parsed !== null) {
-      // Robust fallback if model outputs a standard record mapping
       Object.entries(parsed).forEach(([key, val]) => {
         let cleanPath = key;
         if (!cleanPath.startsWith("/")) {
@@ -277,7 +301,6 @@ export async function generateWebsite(prompt: string): Promise<FileStructure> {
       });
     }
     
-    // Basic validation: ensure an entry point or App file exists
     const hasEntryPoint = Object.keys(files).some(path => {
       const p = path.toLowerCase();
       return p.endsWith("app.tsx") || 
@@ -290,7 +313,6 @@ export async function generateWebsite(prompt: string): Promise<FileStructure> {
     });
 
     if (!hasEntryPoint && Object.keys(files).length > 0) {
-      // Map first available file to App.tsx if missing
       const firstPath = Object.keys(files)[0];
       files["/src/App.tsx"] = files[firstPath];
     }
@@ -304,7 +326,6 @@ export async function generateWebsite(prompt: string): Promise<FileStructure> {
     
     if (e && typeof e === "object") {
       errorMsg = e.message || "";
-      // If message itself is JSON (like the SDK can sometimes emit)
       try {
         const parsedErr = JSON.parse(errorMsg);
         if (parsedErr?.error?.message) {
@@ -312,7 +333,6 @@ export async function generateWebsite(prompt: string): Promise<FileStructure> {
         }
       } catch (_) {}
       
-      // Check properties on the error object
       if (e.status === 429 || e.status === "RESOURCE_EXHAUSTED" || e.code === 429) {
         isQuota = true;
       }
@@ -320,7 +340,6 @@ export async function generateWebsite(prompt: string): Promise<FileStructure> {
       errorMsg = String(e);
     }
 
-    // Inspect the error message and serialized representation for signatures of rate limiting/quota issues
     const serialized = JSON.stringify(e);
     if (
       errorMsg.includes("429") || 
@@ -337,6 +356,17 @@ export async function generateWebsite(prompt: string): Promise<FileStructure> {
       throw new Error(
         "Gemini API Quota/Rate Limit Exceeded (HTTP 429). You have exceeded your current Google AI Studio free-tier quota or rate limit. " +
         "Please check your API key, plan, and billing details in Google AI Studio (https://aistudio.google.com/), or wait a short moment and try again."
+      );
+    }
+
+    if (
+      errorMsg.includes("403") ||
+      errorMsg.includes("PERMISSION_DENIED") ||
+      serialized.includes("PERMISSION_DENIED") ||
+      serialized.includes("403")
+    ) {
+      throw new Error(
+        "Gemini API Permission Denied (HTTP 403). Please verify your API Key permissions or configure a custom API Key in the Cloud Connectors menu."
       );
     }
     
@@ -361,41 +391,45 @@ export async function editElementWithAI(
     .join("\n");
 
   const prompt = `You are an expert React and Tailwind developer.
-Your task is to edit an existing React website's code to apply a specific change to a single element that the user selected/clicked on.
+Your task: Edit the selected HTML element in the existing React website to apply the user's changes.
 
-Here is the selected element the user wants to edit:
-- Tag Name: ${elementInfo.tagName}
-- ID: ${elementInfo.id || "None"}
-- Tailwind Classes: ${elementInfo.className || "None"}
-- Text Content: "${elementInfo.innerText || "None"}"
-- Outer HTML representation: \`${elementInfo.outerHTML}\`
+SELECTED ELEMENT:
+- Tag: ${elementInfo.tagName}
+- ID: ${elementInfo.id || "none"}
+- Classes: ${elementInfo.className || "none"}
+- Content: "${elementInfo.innerText || "none"}"
+- Parent Tag: ${elementInfo.parentTag || "none"}
 
-The user's instruction for this element is: "${instruction}"
+USER INSTRUCTION: "${instruction}"
 
-Find the file (usually /src/App.tsx or a component) containing this element and edit the code to apply the requested changes (visual styling, text changes, structure, or simple handlers). Preserve all other parts of the website, its structure, other files, and imports. 
+REQUIREMENTS:
+- Locate and modify ONLY the target element
+- Preserve all other code, structure, and files unchanged
+- Return the COMPLETE updated workspace
 
-Return the COMPLETE updated file structure. Any files you do not modify MUST be returned completely unchanged.
+${CORE_TECH_REQUIREMENTS}
+${CRITICAL_SYNTAX_RULES}
+${SCHEMA_INSTRUCTIONS}
 
-Current files in the workspace:
-${filesList}
-`;
+CURRENT FILES:
+${filesList}`;
 
   try {
     const textResponse = await runLlmRequest(
       prompt,
       {
         type: Type.ARRAY,
-        description: "An array of all files in the workspace (both modified and unmodified) containing path and complete source content.",
+        description: "Array of all files (modified and unmodified) with complete source content.",
         items: {
           type: Type.OBJECT,
           properties: {
             path: {
               type: Type.STRING,
-              description: "The absolute file path starting with / (e.g. /src/App.tsx, /src/components/Header.tsx)"
+              description: "Absolute file path starting with /"
             },
             content: {
               type: Type.STRING,
-              description: "The complete source code content of the file."
+              description: "Complete file source code"
             }
           },
           required: ["path", "content"]
@@ -423,7 +457,6 @@ ${filesList}
     }
 
     if (Object.keys(files).length > 0) {
-      // Ensure we keep any current files that the AI might have skipped
       const merged: FileStructure = { ...currentFiles };
       Object.entries(files).forEach(([path, content]) => {
         merged[path] = content;
@@ -447,12 +480,9 @@ export function cleanCodeSyntax(code: string): string {
   if (!code) return "";
   let cleaned = code;
   
-  // Fix string concatenation in import statements like 'react' + '-router-dom'
   cleaned = cleaned.replace(/from\s+['"]react['"]\s*\+\s*['"]-router-dom['"]/g, "from 'react-router-dom'");
   cleaned = cleaned.replace(/from\s+['"]([\w@\.\/-]+)['"]\s*\+\s*['"]([\w@\.\/-]+)['"]/g, (_, p1, p2) => `from '${p1}${p2}'`);
   cleaned = cleaned.replace(/import\(['"]([\w@\.\/-]+)['"]\s*\+\s*['"]([\w@\.\/-]+)['"]\)/g, (_, p1, p2) => `import('${p1}${p2}')`);
-
-  // Fix escaped template literals or invalid quotes inside template strings
   cleaned = cleaned.replace(/\\`hsla\(\\ \${/g, "`hsla(${");
   
   return cleaned;
@@ -467,39 +497,44 @@ export async function autoFixErrorWithAI(
     .map(([path, data]) => `--- FILE: ${path} ---\n${cleanCodeSyntax(data)}\n`)
     .join("\n");
 
-  const prompt = `You are an expert React, TypeScript, and Babel developer.
-The React sandbox preview encountered compiler or runtime errors. Analyze the error message(s), locate ALL buggy or syntax-broken files in the workspace, fix them completely, and return the updated file(s).
+  const prompt = `You are an expert React, TypeScript, and module system specialist.
+TASK: Fix all compiler and runtime errors in the React workspace.
 
-ERROR DETAILS:
+ERROR INFORMATION:
 ${errorMessage}
+${errorContext ? `\nDETAILS:\n${errorContext}` : ""}
 
-${errorContext ? `STACK TRACE / DETAILS:\n${errorContext}\n` : ""}
+DEBUGGING APPROACH:
+1. Identify the root cause(s) of the error(s)
+2. Fix ALL syntax errors, broken imports, and logic issues
+3. Validate that fixes don't introduce new errors
+4. Return ONLY modified files
 
-CURRENT WORKSPACE FILES:
-${filesList}
+${CRITICAL_SYNTAX_RULES}
 
-STRICT CODE SYNTAX & INTEGRITY RULES:
-1. Fix all syntax errors, missing semicolons, unclosed brackets/tags, and invalid imports across all files.
-2. NEVER split package imports like 'react' + '-router-dom'. Use standard import strings: import { ... } from 'react-router-dom'.
-3. Ensure all TypeScript interfaces, functions, JSX elements, and objects are syntactically valid and compile 100% cleanly.
-4. Return a JSON array containing ONLY the file(s) that you modified to fix the issue(s).`;
+RETURN FORMAT:
+JSON array containing ONLY the corrected files:
+[{"path": "/src/App.tsx", "content": "fixed code..."}]
+
+CURRENT WORKSPACE:
+${filesList}`;
 
   try {
     const textResponse = await runLlmRequest(
       prompt,
       {
         type: Type.ARRAY,
-        description: "An array of ONLY modified files containing path and complete updated source content.",
+        description: "Array of ONLY modified files with corrected source code.",
         items: {
           type: Type.OBJECT,
           properties: {
             path: {
               type: Type.STRING,
-              description: "The absolute file path starting with / (e.g. /src/App.tsx)"
+              description: "Absolute file path"
             },
             content: {
               type: Type.STRING,
-              description: "The complete updated source code content for this file."
+              description: "Corrected source code"
             }
           },
           required: ["path", "content"]
@@ -533,7 +568,6 @@ STRICT CODE SYNTAX & INTEGRITY RULES:
       return merged;
     }
     
-    // Fallback: also sanitize current files to fix any string concatenation issues automatically
     const cleanedCurrent: FileStructure = {};
     Object.entries(currentFiles).forEach(([p, c]) => {
       cleanedCurrent[p] = cleanCodeSyntax(c);
@@ -560,38 +594,44 @@ export async function editWebsiteWithAI(
     .join("\n");
 
   const prompt = `You are an expert React and Tailwind developer.
-Your task is to update and edit the existing multi-page React website based on the user's instructions: "${instruction}".
+TASK: Update the existing React website based on the user's instruction: "${instruction}"
 
-TECHNICAL & SYNTAX REQUIREMENTS:
-1. Use React with TypeScript (tsx/ts files).
-2. Use Tailwind CSS for all styling (assume it's configured).
-3. Use 'react-router-dom' for multi-page navigation (prefer 'MemoryRouter' for the preview environment).
-4. Use 'lucide-react' for icons.
-5. All imports should be relative.
-6. CRITICAL SYNTAX INTEGRITY: Write 100% clean, valid, executable TypeScript and JSX code. Do NOT output invalid syntax such as stray colons, missing closing tags, unclosed quotes, or malformed object properties.
+REQUIREMENTS:
+- Implement the requested changes
+- Preserve all unmodified files completely unchanged
+- Return the COMPLETE updated workspace
 
-Return the COMPLETE updated file structure. Any files you do not modify MUST be returned completely unchanged.
+${CORE_TECH_REQUIREMENTS}
 
-Current files in the workspace:
-${filesList}
-`;
+DESIGN & QUALITY:
+- Maintain existing design language and component patterns
+- Use Tailwind for any new styling
+- Ensure responsive design
+- Follow the existing code structure
+
+${CRITICAL_SYNTAX_RULES}
+
+${SCHEMA_INSTRUCTIONS}
+
+CURRENT WORKSPACE:
+${filesList}`;
 
   try {
     const textResponse = await runLlmRequest(
       prompt,
       {
         type: Type.ARRAY,
-        description: "An array of all files in the workspace (both modified and unmodified) containing path and complete source content.",
+        description: "Array of all files (modified and unmodified) with complete source content.",
         items: {
           type: Type.OBJECT,
           properties: {
             path: {
               type: Type.STRING,
-              description: "The absolute file path starting with / (e.g. /src/App.tsx, /src/components/Header.tsx)"
+              description: "Absolute file path starting with /"
             },
             content: {
               type: Type.STRING,
-              description: "The complete source code content of the file."
+              description: "Complete file source code"
             }
           },
           required: ["path", "content"]
