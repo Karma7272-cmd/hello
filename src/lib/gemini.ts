@@ -20,8 +20,9 @@ export function getAI(overrideApiKey?: string): GoogleGenAI {
     console.error("Error reading custom Gemini key from cache", e);
   }
 
+  const keyToUse = process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY || "";
   return new GoogleGenAI({ 
-    apiKey: process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY || ""
+    apiKey: keyToUse
   });
 }
 
