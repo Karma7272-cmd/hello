@@ -21,7 +21,7 @@ export function getAI(overrideApiKey?: string): GoogleGenAI {
   }
 
   return new GoogleGenAI({ 
-    apiKey: process.env.GEMINI_API_KEY || ""
+    apiKey: process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY || ""
   });
 }
 
